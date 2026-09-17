@@ -1,8 +1,8 @@
 # ⚡ ResumeForge
 
-> Precision ATS Resume & Cover Letter Suite — built on top of [Subhraneel Goswami](https://github.com/subhraneel2005)'s open-source project foundation.
+> Precision ATS Resume & Cover Letter Suite - built on top of [Subhraneel Goswami](https://github.com/subhraneel2005)'s open-source project foundation.
 
-**ResumeForge** turns your existing resume (PDF or Word document) into an ATS-optimized, role-tailored resume in seconds. Features Humanizer anti-AI writing intelligence, live in-place LaTeX editing, Word (.docx) & PDF multi-format export, and targeted cover letters & cold outreach. Runs **100% on your own API keys** (BYOK) — bring your own key, delete your data anytime, zero subscription walls.
+**ResumeForge** turns your existing resume (PDF or Word document) into an ATS-optimized, role-tailored resume in seconds. Features Humanizer anti-AI writing intelligence, live in-place LaTeX editing, Word (.docx) & PDF multi-format export, and targeted cover letters & cold outreach. Runs **100% on your own API keys** (BYOK) - bring your own key, delete your data anytime, zero subscription walls.
 
 ---
 
@@ -12,10 +12,10 @@
 - Upload your existing resume (PDF or Word `.docx`) and paste the **job description** you're chasing.
 - The AI rewrites and tailors your resume to that exact role, optimizing keywords for Applicant Tracking Systems (ATS) while preserving your authentic experience.
 - Contact links (LinkedIn, GitHub, portfolio) are pulled straight from your document, so they always point to the real URLs.
-- **Every AI change is highlighted** — added bullets, rewritten bullets, and new skills are color-coded so you can audit exactly what the AI changed before exporting.
+- **Every AI change is highlighted** - added bullets, rewritten bullets, and new skills are color-coded so you can audit exactly what the AI changed before exporting.
 
 ### 📝 Live Editor & Multi-Format Export
-- **Downloadable PDF**: Rendered and compiled entirely in your browser using `@react-pdf/renderer` — no server-side LaTeX toolchain needed.
+- **Downloadable PDF**: Rendered and compiled entirely in your browser using `@react-pdf/renderer` - no server-side LaTeX toolchain needed.
 - **Word Document (.docx)**: Export clean, professionally formatted Microsoft Word files.
 - **LaTeX Source (`.tex`)**: Export standard Jake's Resume LaTeX code with an integrated live in-browser editor and instant preview.
 
@@ -28,12 +28,12 @@
 - Matches the tone and accomplishments of your optimized resume.
 
 ### 📧 Cold Outreach That Doesn't Suck
-- Provide a job description and get a polished **cold email** and a snappy **cold DM** — written with your tailored resume in hand.
+- Provide a job description and get a polished **cold email** and a snappy **cold DM** - written with your tailored resume in hand.
 - Copy-paste ready for recruiters and hiring managers. Fire and forget.
 
 ### 🔐 Bring Your Own Key (BYOK)
-- Add either an **OpenAI** or **Google AI** API key under **AI Settings** — it powers the resume tailor, cover letter, and outreach generator.
-- Your key is encrypted server-side with AES-256. No server-side secrets, no middleman markup — every AI call is billed directly to *your* provider account.
+- Add either an **OpenAI** or **Google AI** API key under **AI Settings** - it powers the resume tailor, cover letter, and outreach generator.
+- Your key is encrypted server-side with AES-256. No server-side secrets, no middleman markup - every AI call is billed directly to *your* provider account.
 
 ### 🔒 User Profiles & Total Privacy
 - **Account & Profile Creation**: Create your personal account with email and password to securely manage your API keys and saved configurations.
@@ -61,7 +61,7 @@ Architecture & stack powering the product.
 - **Auth:** Better Auth (Email & Password credentials, session cookies)
 - **Database:** Drizzle ORM on Neon/Postgres (`lib/db/schema.ts`)
 - **AI:** Vercel AI SDK (`ai` v7) with `@ai-sdk/openai` and `@ai-sdk/google`
-- **PDF Engine:** `@react-pdf/renderer` (`components/pdf-resume.tsx`) — compiled client-side in the browser
+- **PDF Engine:** `@react-pdf/renderer` (`components/pdf-resume.tsx`) - compiled client-side in the browser
 - **Document Processing:** `pdfjs-dist`, `mammoth` (DOCX parsing), and `docx` (Word export)
 
 ### Key Modules
