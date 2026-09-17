@@ -9,9 +9,10 @@ import type { Resume } from "@/lib/schemas/resume";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
-    // Verify session
     const session = await auth.api.getSession({
       headers: request.headers,
     });
@@ -20,13 +21,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Rate limiting protection
     const rateLimit = checkAiGenerationRateLimit(session.user.id);
     if (!rateLimit.success) {
       return rateLimitResponse(rateLimit.resetMs);
     }
 
-    // Look up user's AI provider settings
     const settings = await getActiveAiSettings(session.user.id);
 
     if (!settings) {
@@ -52,14 +51,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const coverLetter = await generateCoverLetter(
-      resume as Resume,
-      jobDescription,
-      provider,
-      apiKey,
-      modelId,
-      pastCoverLetter
-    );
+    let coverLetter;
+    try {
+      coverLetter = await generateCoverLetter(
+        resume as Resume,
+        jobDescription,
+        provider,
+        apiKey,
+        modelId,
+        pastCoverLetter
+      );
+    } catch (primaryErr) {
+      if (provider === "google") {
+        const fallbacks = [
+          "gemini-3.6-flash",
+          "gemini-3.5-flash-lite",
+          "gemini-3.5-flash",
+          "gemini-3.7-flash",
+        ].filter((m) => m !== modelId);
+
+        let fallbackSuccess = false;
+        let lastError = primaryErr;
+
+        for (const fbModel of fallbacks) {
+          safeLog.warn(
+            `Primary cover letter model ${modelId} failed (${(primaryErr as Error).message}), attempting fallback to ${fbModel}...`
+          );
+          try {
+            coverLetter = await generateCoverLetter(
+              resume as Resume,
+              jobDescription,
+              provider,
+              apiKey,
+              fbModel,
+              pastCoverLetter
+            );
+            fallbackSuccess = true;
+            break;
+          } catch (fbErr) {
+            lastError = fbErr;
+          }
+        }
+
+        if (!fallbackSuccess) {
+          throw lastError;
+        }
+      } else {
+        throw primaryErr;
+      }
+    }
 
     return NextResponse.json({ coverLetter });
   } catch (error) {

@@ -64,6 +64,22 @@ export function Navbar() {
           </button>
         </Link>
 
+        <Link href="/cover-letter">
+          <Button
+            variant="outline"
+            size="sm"
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.15)",
+              color: "rgba(245,245,240,0.85)",
+              fontSize: "0.8rem",
+            }}
+          >
+            <File01Icon size={13} className="mr-1.5" />
+            Cover Letter
+          </Button>
+        </Link>
+
         {session ? (
           <div className="flex items-center gap-2">
             <Button

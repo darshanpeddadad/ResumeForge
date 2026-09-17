@@ -6,6 +6,8 @@ import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { CircleCheckIcon } from "@/components/ui/circle-check"
 import { RefreshIcon } from "@/components/ui/refresh"
+import { MagicWand01Icon } from "@/components/ui/magic-wand-01"
+import { File01Icon } from "@/components/ui/file-01"
 import { ArrowLeft02Icon } from "@/components/ui/arrow-left-02"
 import { ArrowRight02Icon } from "@/components/ui/arrow-right-02"
 import { UndoIcon } from "@/components/ui/undo"
@@ -63,6 +65,8 @@ export default function GeneratePage() {
   const [coldEmail, setColdEmail] = useState<string | null>(null)
   const [coldDM, setColdDM] = useState<string | null>(null)
   const [coverLetter, setCoverLetter] = useState<CoverLetterResult | null>(null)
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false)
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
   const [error, setError] = useState<{ message: string; toSettings: boolean } | null>(null)
 
   const effectiveStep = isSignedIn ? Math.max(currentStep, 2) : currentStep
@@ -133,41 +137,48 @@ export default function GeneratePage() {
       const latex = generateLatex(resume)
       setLatexCode(latex)
 
-      // Step 4: Generate outreach and cover letter (if JD provided)
+      // Step 4: Generate outreach and cover letter (if JD provided) concurrently
       if (jd.trim()) {
-        try {
-          const outreachResponse = await fetch("/api/generate-outreach", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ resume, jobDescription: jd }),
+        setIsGeneratingCoverLetter(true)
+        setCoverLetterError(null)
+
+        const outreachPromise = fetch("/api/generate-outreach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume, jobDescription: jd }),
+        })
+          .then(async (outreachResponse) => {
+            if (outreachResponse.ok) {
+              const { outreach } = await outreachResponse.json()
+              const emailData: ColdEmail = outreach.coldEmail
+              const dmData: ColdDM = outreach.coldDM
+              setColdEmail(renderColdEmail(emailData))
+              setColdDM(renderColdDM(dmData))
+            }
+          })
+          .catch((err) => console.error("Outreach generation failed", err))
+
+        const coverLetterPromise = fetch("/api/generate-cover-letter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume, jobDescription: jd }),
+        })
+          .then(async (coverLetterResponse) => {
+            const data = await coverLetterResponse.json().catch(() => null)
+            if (coverLetterResponse.ok && data?.coverLetter) {
+              setCoverLetter(data.coverLetter)
+            } else {
+              setCoverLetterError(data?.error || "Cover letter generation failed.")
+            }
+          })
+          .catch((err) => {
+            setCoverLetterError(err instanceof Error ? err.message : "Cover letter generation failed")
+          })
+          .finally(() => {
+            setIsGeneratingCoverLetter(false)
           })
 
-          if (outreachResponse.ok) {
-            const { outreach } = await outreachResponse.json()
-            const emailData: ColdEmail = outreach.coldEmail
-            const dmData: ColdDM = outreach.coldDM
-            setColdEmail(renderColdEmail(emailData))
-            setColdDM(renderColdDM(dmData))
-          }
-        } catch {
-          // Outreach generation is optional, don't block resume
-          console.error("Outreach generation failed")
-        }
-
-        try {
-          const coverLetterResponse = await fetch("/api/generate-cover-letter", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ resume, jobDescription: jd }),
-          })
-
-          if (coverLetterResponse.ok) {
-            const { coverLetter: clData } = await coverLetterResponse.json()
-            setCoverLetter(clData)
-          }
-        } catch {
-          console.error("Cover letter generation failed")
-        }
+        Promise.allSettled([outreachPromise, coverLetterPromise])
       }
 
       // Move to result view
@@ -181,6 +192,30 @@ export default function GeneratePage() {
       setIsProcessing(false)
     }
   }, [resumeFile, jd])
+
+    const handleGenerateCoverLetter = useCallback(async () => {
+    if (!resumeData || !jd.trim()) return
+    setIsGeneratingCoverLetter(true)
+    setCoverLetterError(null)
+    try {
+      const res = await fetch("/api/generate-cover-letter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume: resumeData, jobDescription: jd }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to generate cover letter (${res.status})`)
+      }
+      if (data?.coverLetter) {
+        setCoverLetter(data.coverLetter)
+      }
+    } catch (err) {
+      setCoverLetterError(err instanceof Error ? err.message : "Failed to generate cover letter")
+    } finally {
+      setIsGeneratingCoverLetter(false)
+    }
+  }, [resumeData, jd])
 
   const handleDownloadTeX = useCallback(() => {
     if (!latexCode) return
@@ -225,7 +260,44 @@ export default function GeneratePage() {
               setLatexCode(updatedLatex)
             }}
           />
-          {coverLetter && <CoverLetterPreview coverLetter={coverLetter} />}
+          {coverLetter ? (
+            <CoverLetterPreview coverLetter={coverLetter} />
+          ) : (
+            <Card className="glass-card w-full border border-border/50 shadow-2xl backdrop-blur-xl p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <File01Icon size={16} className="text-primary shrink-0" />
+                    <h3 className="text-sm font-semibold text-foreground">Tailored Cover Letter</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {isGeneratingCoverLetter
+                      ? "Generating tailored, humanized cover letter with zero AI tells..."
+                      : jd.trim()
+                      ? "Create an ATS-matched, humanized cover letter tailored to this role."
+                      : "Add a Job Description in Step 3 to generate a targeted cover letter."}
+                  </p>
+                  {coverLetterError && (
+                    <p className="text-xs text-destructive pt-0.5">{coverLetterError}</p>
+                  )}
+                </div>
+                {jd.trim() && (
+                  <Button
+                    onClick={handleGenerateCoverLetter}
+                    disabled={isGeneratingCoverLetter}
+                    className="glossy-btn-primary text-black font-semibold rounded-xl text-xs h-8 px-3.5 shrink-0"
+                  >
+                    {isGeneratingCoverLetter ? (
+                      <RefreshIcon size={13} className="mr-1.5 shrink-0 animate-spin text-black" />
+                    ) : (
+                      <MagicWand01Icon size={13} className="mr-1.5 shrink-0 text-black" />
+                    )}
+                    {isGeneratingCoverLetter ? "Generating..." : "Generate Cover Letter"}
+                  </Button>
+                )}
+              </div>
+            </Card>
+          )}
           {coldEmail && coldDM && (
             <OutreachPreview email={coldEmail} dm={coldDM} />
           )}

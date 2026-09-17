@@ -8,6 +8,8 @@ import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth.api.getSession({

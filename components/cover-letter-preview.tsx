@@ -73,13 +73,12 @@ export function CoverLetterPreview({ coverLetter }: CoverLetterPreviewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to humanize text.");
+        throw new Error(data?.error || `Failed to humanize text (${res.status})`);
       }
-      const { humanized } = await res.json();
-      if (humanized) {
-        setText(humanized);
+      if (data?.humanized) {
+        setText(data.humanized);
       }
     } catch (err) {
       console.error("Humanize error:", err);

@@ -9,6 +9,8 @@ import type { Resume } from "@/lib/schemas/resume";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth.api.getSession({
