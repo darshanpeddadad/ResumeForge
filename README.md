@@ -35,15 +35,15 @@
 - Add either an **OpenAI** or **Google AI** API key under **AI Settings** — it powers the resume tailor, cover letter, and outreach generator.
 - Your key is encrypted server-side with AES-256. No server-side secrets, no middleman markup — every AI call is billed directly to *your* provider account.
 
-### 🔒 Your Data, Your Call
-- **Google or GitHub** sign-in via Better Auth.
+### 🔒 User Profiles & Total Privacy
+- **Account & Profile Creation**: Create your personal account with email and password to securely manage your API keys and saved configurations.
 - No subscription walls or lock-in. Your resumes and generated outreach stay private and in your hands.
 
 ---
 
 ## 🚀 Quick Start (for users)
 
-1. **Sign in** with Google or GitHub.
+1. **Create your profile** or sign in with your email and password.
 2. Go to **AI Settings**, paste your **OpenAI** or **Google AI** API key.
 3. Upload your resume → paste the job description → hit **Generate**.
 4. Audit the highlighted changes, customize bullets in the live editor, and download your **PDF**, **Word (.docx)**, or **LaTeX** file.
@@ -58,7 +58,7 @@ Architecture & stack powering the product.
 ### Stack
 - **Framework:** Next.js 16 (App Router, React 19, TypeScript)
 - **UI:** Tailwind CSS + shadcn/ui
-- **Auth:** Better Auth (Google + GitHub OAuth, cookies)
+- **Auth:** Better Auth (Email & Password credentials, session cookies)
 - **Database:** Drizzle ORM on Neon/Postgres (`lib/db/schema.ts`)
 - **AI:** Vercel AI SDK (`ai` v7) with `@ai-sdk/openai` and `@ai-sdk/google`
 - **PDF Engine:** `@react-pdf/renderer` (`components/pdf-resume.tsx`) — compiled client-side in the browser
@@ -79,10 +79,6 @@ Architecture & stack powering the product.
 ### Environment
 ```env
 DATABASE_URL=postgres://...
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GITHUB_CLIENT_ID=...        # GitHub OAuth callback: /api/auth/callback/github
-GITHUB_CLIENT_SECRET=...
 BETTER_AUTH_SECRET=...      # also used as the encryption key for users' API keys
 BETTER_AUTH_URL=http://localhost:3000
 ```
