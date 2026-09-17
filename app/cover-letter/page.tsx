@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -16,6 +18,14 @@ import { MagicWand01Icon } from "@/components/ui/magic-wand-01";
 import type { CoverLetterResult } from "@/lib/cover-letter-generator";
 
 export default function CoverLetterPage() {
+  const { data: session, isPending } = authClient.useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.replace("/sign-in?callbackUrl=/cover-letter");
+    }
+  }, [session, isPending, router]);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -104,6 +114,21 @@ export default function CoverLetterPage() {
       setIsGenerating(false);
     }
   }, [resumeText, jobDescription, pastCoverLetter]);
+
+  if (isPending || !session) {
+    return (
+      <div className="relative flex min-h-screen flex-col items-center justify-between overflow-hidden bg-background">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-xs text-muted-foreground">Checking authentication...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-between overflow-hidden bg-background">

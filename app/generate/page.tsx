@@ -1,7 +1,8 @@
-﻿"use client"
+"use client"
 
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { CircleCheckIcon } from "@/components/ui/circle-check"
@@ -53,7 +54,8 @@ import type { ColdEmail, ColdDM } from "@/lib/schemas/outreach"
 const steps = [1, 2, 3]
 
 export default function GeneratePage() {
-  const { data: session } = authClient.useSession()
+  const { data: session, isPending } = authClient.useSession()
+  const router = useRouter()
   const isSignedIn = !!session
   const [currentStep, setCurrentStep] = useState(1)
   const [jd, setJd] = useState("")
@@ -70,6 +72,12 @@ export default function GeneratePage() {
   const [error, setError] = useState<{ message: string; toSettings: boolean } | null>(null)
 
   const effectiveStep = isSignedIn ? Math.max(currentStep, 2) : currentStep
+
+    useEffect(() => {
+    if (!isPending && !session) {
+      router.replace("/sign-in?callbackUrl=/generate")
+    }
+  }, [session, isPending, router])
 
   useEffect(() => {
     if (isSignedIn) {
@@ -237,6 +245,22 @@ export default function GeneratePage() {
     setCoverLetter(null)
     setHighlights(null)
   }, [])
+
+  // Result view
+  if (isPending || !session) {
+    return (
+      <div className="relative flex min-h-screen flex-col items-center justify-between overflow-hidden bg-background">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-xs text-muted-foreground">Checking authentication...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // Result view
   if (currentStep === 4 && latexCode && resumeData) {

@@ -13,7 +13,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push("/sign-in");
+      router.replace("/sign-in?callbackUrl=/settings");
     }
   }, [session, isPending, router]);
 

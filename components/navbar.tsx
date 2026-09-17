@@ -32,7 +32,7 @@ export function Navbar() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Link href="/generate">
+        <Link href={session ? "/generate" : "/sign-in?callbackUrl=/generate"}>
           <button
             style={{
               display: "inline-flex",
@@ -64,7 +64,7 @@ export function Navbar() {
           </button>
         </Link>
 
-        <Link href="/cover-letter">
+        <Link href={session ? "/cover-letter" : "/sign-in?callbackUrl=/cover-letter"}>
           <Button
             variant="outline"
             size="sm"

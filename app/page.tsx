@@ -64,7 +64,7 @@ export default function Page() {
 
         {/* Glossy CTA Actions */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
-          <Link href="/generate">
+          <Link href={session ? "/generate" : "/sign-in?callbackUrl=/generate"}>
             <Button size="lg" className="h-13 px-8 text-sm sm:text-base font-bold text-white glossy-btn-primary rounded-xl shadow-lg gap-2">
               {session ? "Open the App" : "You can Start because it's free, not a click bait for real :("}
               <ArrowRight02Icon size={16} />
