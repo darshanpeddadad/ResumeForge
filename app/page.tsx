@@ -59,7 +59,7 @@ export default function Page() {
 
         {/* Subtitle */}
         <p className="max-w-xl text-sm sm:text-base text-muted-foreground leading-relaxed">
-          Let&apos;s fix that. AI-tailored resumes, cover letters, and cold outreach drafts—all in one place, because writing them yourself is a form of self-harm. 💀
+          Let&apos;s fix that. AI-tailored resumes, cover letters, and cold outreach drafts all in one place, because writing them yourself is a form of self harm. 💀
         </p>
 
         {/* Glossy CTA Actions */}
