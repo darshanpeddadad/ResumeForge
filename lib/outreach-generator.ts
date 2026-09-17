@@ -1,0 +1,99 @@
+import { generateText, Output } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { z } from "zod";
+import type { Resume } from "@/lib/schemas/resume";
+import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+
+const outreachValuesSchema = z.object({
+  coldEmail: z.object({
+    recipientName: z.string(),
+    companyName: z.string(),
+    specificThing: z.string(),
+    specificArea: z.string(),
+    role: z.string(),
+    relevantSkills: z.array(z.string()),
+    achievement: z.string(),
+    portfolioLink: z.string(),
+    githubLink: z.string(),
+    linkedinLink: z.string(),
+    senderName: z.string(),
+  }),
+  coldDM: z.object({
+    recipientName: z.string(),
+    companyName: z.string(),
+    specificThing: z.string(),
+    niche: z.string(),
+    technologies: z.array(z.string()),
+    projectAchievement: z.string(),
+    role: z.string(),
+  }),
+});
+
+type OutreachValues = z.infer<typeof outreachValuesSchema>;
+
+function getModel(provider: Provider, apiKey: string, modelId?: string) {
+  const cleanApiKey = (apiKey || "").replace(/[^\x20-\x7E]/g, "").trim();
+  const model = modelId || DEFAULT_MODEL[provider];
+  if (provider === "google") {
+    const google = createGoogleGenerativeAI({ apiKey: cleanApiKey });
+    return google(model);
+  }
+  if (provider === "anthropic") {
+    const anthropic = createAnthropic({ apiKey: cleanApiKey });
+    return anthropic(model);
+  }
+  if (provider === "perplexity") {
+    const perplexity = createOpenAI({
+      apiKey: cleanApiKey,
+      baseURL: "https://api.perplexity.ai",
+    });
+    return perplexity(model);
+  }
+  const openai = createOpenAI({ apiKey: cleanApiKey });
+  return openai(model);
+}
+
+export async function generateOutreach(
+  resume: Resume,
+  jobDescription: string,
+  provider: Provider,
+  apiKey: string,
+  modelId?: string
+): Promise<OutreachValues> {
+  const resumeSummary = [
+    `Name: ${resume.contact.name}`,
+    `Email: ${resume.contact.email}`,
+    resume.contact.linkedin ? `LinkedIn: ${resume.contact.linkedin}` : "",
+    resume.contact.github ? `GitHub: ${resume.contact.github}` : "",
+    `Experience: ${resume.experience.map((e) => `${e.position} at ${e.company}`).join("; ")}`,
+    `Skills: ${resume.technicalSkills.languages.join(", ")}, ${resume.technicalSkills.developerTools.join(", ")}, ${resume.technicalSkills.technologiesFrameworks.join(", ")}`,
+    `Projects: ${resume.projects.map((p) => p.name).join(", ")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const { output } = await generateText({
+    model: getModel(provider, apiKey, modelId) as any,
+    instructions: `You are an expert outreach copywriter. Given a resume and a job description, fill in the template values for a cold email and a cold DM.
+
+RULES:
+- Extract the company name and role title from the job description
+- Use the candidate's actual skills, projects, and experience from the resume
+- specificThing: Pick something genuine about the company (product, mission, recent news, tech stack)
+- specificArea: A specific technical area the company works on
+- achievement: Use the most impressive bullet point from their resume
+- relevantSkills: Pick 2-3 skills most relevant to the job description
+- For DM: niche should be their primary engineering domain
+- For DM: projectAchievement should be their most impressive project, described concisely
+- portfolioLink/githubLink/linkedinLink: Use the actual links from the resume, or "N/A" if not provided
+- Keep all values concise and natural
+- senderName and recipientName should use the actual names`,
+    prompt: `RESUME:\n${resumeSummary}\n\nJOB DESCRIPTION:\n${jobDescription}`,
+    output: Output.object({ schema: outreachValuesSchema }),
+    maxRetries: 1,
+  });
+
+  return output;
+}

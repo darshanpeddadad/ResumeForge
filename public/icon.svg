@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="rf-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141414" />
+      <stop offset="100%" stop-color="#000000" />
+    </linearGradient>
+    <linearGradient id="rf-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8c97a" />
+      <stop offset="100%" stop-color="#c9a96e" />
+    </linearGradient>
+  </defs>
+
+  <!-- Pitch Black Rounded Container with Gold Border -->
+  <rect width="32" height="32" rx="7" fill="url(#rf-bg)" />
+  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="6.25" fill="none" stroke="#c9a96e" stroke-width="1.2" stroke-opacity="0.5" />
+
+  <!-- Outer document outline with cut corner in Gold -->
+  <path
+    d="M5.5 6.5C5.5 5.67157 6.17157 5 7 5H21.5L26.5 10V25C26.5 25.8284 25.8284 26.5 25 26.5H7C6.17157 26.5 5.5 25.8284 5.5 25V6.5Z"
+    fill="#c9a96e"
+    fill-opacity="0.12"
+    stroke="#c9a96e"
+    stroke-width="1.2"
+  />
+
+  <!-- Corner fold -->
+  <path
+    d="M21.5 5L26.5 10H23C22.1716 10 21.5 9.32843 21.5 8.5V5Z"
+    fill="#c9a96e"
+    fill-opacity="0.4"
+  />
+
+  <!-- R letter in gold -->
+  <path
+    d="M9.5 11H13.2C14.5 11 15.5 11.9 15.5 13.2C15.5 14.4 14.6 15.3 13.5 15.5L15.5 20H13.8L12 16H11V20H9.5V11ZM11 12.3V14.7H13C13.7 14.7 14.1 14.2 14.1 13.5C14.1 12.8 13.7 12.3 13 12.3H11Z"
+    fill="url(#rf-gold)"
+  />
+
+  <!-- F letter in crisp white -->
+  <path
+    d="M17 11H21.2V12.5H18.6V14.6H20.8V16.1H18.6V20H17V11Z"
+    fill="#ffffff"
+    fill-opacity="0.95"
+  />
+
+  <!-- Gold Dot Accent -->
+  <circle cx="23" cy="23.5" r="1.5" fill="#c9a96e" />
+</svg>
