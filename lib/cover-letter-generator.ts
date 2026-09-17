@@ -4,7 +4,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { Resume } from "@/lib/schemas/resume";
-import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+import type { Provider } from "@/lib/ai-models";
+import { executeWithModelFallback } from "@/lib/ai-runner";
 
 export const coverLetterSchema = z.object({
   recipientName: z.string(),
@@ -20,27 +21,7 @@ export const coverLetterSchema = z.object({
 
 export type CoverLetterResult = z.infer<typeof coverLetterSchema>;
 
-function getModel(provider: Provider, apiKey: string, modelId?: string) {
-  const cleanApiKey = (apiKey || "").replace(/[^\x20-\x7E]/g, "").trim();
-  const model = modelId || DEFAULT_MODEL[provider];
-  if (provider === "google") {
-    const google = createGoogleGenerativeAI({ apiKey: cleanApiKey });
-    return google(model);
-  }
-  if (provider === "anthropic") {
-    const anthropic = createAnthropic({ apiKey: cleanApiKey });
-    return anthropic(model);
-  }
-  if (provider === "perplexity") {
-    const perplexity = createOpenAI({
-      apiKey: cleanApiKey,
-      baseURL: "https://api.perplexity.ai",
-    });
-    return perplexity(model);
-  }
-  const openai = createOpenAI({ apiKey: cleanApiKey });
-  return openai(model);
-}
+// getModel is now handled by @/lib/ai-runner with universal fallback
 
 const COVER_LETTER_SYSTEM_PROMPT = `You are an expert career advisor and technical recruiter creating a tailored, high-impact cover letter based on a candidate's resume and a specific job description.
 
@@ -121,13 +102,20 @@ export async function generateCoverLetter(
       : "",
   ].join("\n");
 
-  const { output } = await generateText({
-    model: getModel(provider, apiKey, modelId) as any,
-    instructions: COVER_LETTER_SYSTEM_PROMPT,
-    prompt,
-    output: Output.object({ schema: coverLetterSchema }),
-    maxRetries: 1,
-  });
-
-  return output;
+  return executeWithModelFallback(
+    provider,
+    apiKey,
+    modelId,
+    "Cover Letter Generation",
+    async (model) => {
+      const { output } = await generateText({
+        model: model as any,
+        instructions: COVER_LETTER_SYSTEM_PROMPT,
+        prompt,
+        output: Output.object({ schema: coverLetterSchema }),
+        maxRetries: 1,
+      });
+      return output;
+    }
+  );
 }

@@ -3,7 +3,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { parseResultSchema, type ParseResult } from "@/lib/schemas/resume";
-import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+import type { Provider } from "@/lib/ai-models";
+import { executeWithModelFallback } from "@/lib/ai-runner";
 
 const SYSTEM_PROMPT = `You are an expert resume parser and ATS optimizer. Extract information from the provided resume text, structure it as JSON, and ENHANCE it to be comprehensive, detailed, and ATS-friendly.
 
@@ -56,28 +57,6 @@ function sanitizeText(str: string): string {
     .replace(/[\u2013\u2014]/g, "-");
 }
 
-function getModel(provider: Provider, apiKey: string, modelId?: string) {
-  const cleanApiKey = (apiKey || "").replace(/[^\x20-\x7E]/g, "").trim();
-  const model = modelId || DEFAULT_MODEL[provider];
-  if (provider === "google") {
-    const google = createGoogleGenerativeAI({ apiKey: cleanApiKey });
-    return google(model);
-  }
-  if (provider === "anthropic") {
-    const anthropic = createAnthropic({ apiKey: cleanApiKey });
-    return anthropic(model);
-  }
-  if (provider === "perplexity") {
-    const perplexity = createOpenAI({
-      apiKey: cleanApiKey,
-      baseURL: "https://api.perplexity.ai",
-    });
-    return perplexity(model);
-  }
-  const openai = createOpenAI({ apiKey: cleanApiKey });
-  return openai(model);
-}
-
 export async function parseResumeWithLLM(
   resumeText: string,
   jobDescription?: string,
@@ -92,13 +71,20 @@ export async function parseResumeWithLLM(
     ? `RESUME TEXT:\n\n${cleanResume}\n\n---\nJOB DESCRIPTION (for keyword tailoring ONLY - do NOT add new entries):\n\n${cleanJD}`
     : `RESUME TEXT:\n\n${cleanResume}`;
 
-  const { output } = await generateText({
-    model: getModel(provider, apiKey || "", modelId) as any,
-    instructions: SYSTEM_PROMPT,
-    prompt: userMessage,
-    output: Output.object({ schema: parseResultSchema }),
-    maxRetries: 1,
-  });
-
-  return output;
+  return executeWithModelFallback(
+    provider,
+    apiKey || "",
+    modelId,
+    "Resume Parsing",
+    async (model) => {
+      const { output } = await generateText({
+        model: model as any,
+        instructions: SYSTEM_PROMPT,
+        prompt: userMessage,
+        output: Output.object({ schema: parseResultSchema }),
+        maxRetries: 1,
+      });
+      return output;
+    }
+  );
 }

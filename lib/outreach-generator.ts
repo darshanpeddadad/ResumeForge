@@ -4,7 +4,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { Resume } from "@/lib/schemas/resume";
-import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+import type { Provider } from "@/lib/ai-models";
+import { executeWithModelFallback } from "@/lib/ai-runner";
 
 const outreachValuesSchema = z.object({
   coldEmail: z.object({
@@ -33,27 +34,7 @@ const outreachValuesSchema = z.object({
 
 type OutreachValues = z.infer<typeof outreachValuesSchema>;
 
-function getModel(provider: Provider, apiKey: string, modelId?: string) {
-  const cleanApiKey = (apiKey || "").replace(/[^\x20-\x7E]/g, "").trim();
-  const model = modelId || DEFAULT_MODEL[provider];
-  if (provider === "google") {
-    const google = createGoogleGenerativeAI({ apiKey: cleanApiKey });
-    return google(model);
-  }
-  if (provider === "anthropic") {
-    const anthropic = createAnthropic({ apiKey: cleanApiKey });
-    return anthropic(model);
-  }
-  if (provider === "perplexity") {
-    const perplexity = createOpenAI({
-      apiKey: cleanApiKey,
-      baseURL: "https://api.perplexity.ai",
-    });
-    return perplexity(model);
-  }
-  const openai = createOpenAI({ apiKey: cleanApiKey });
-  return openai(model);
-}
+// getModel is now handled by @/lib/ai-runner with universal fallback
 
 export async function generateOutreach(
   resume: Resume,
@@ -74,9 +55,15 @@ export async function generateOutreach(
     .filter(Boolean)
     .join("\n");
 
-  const { output } = await generateText({
-    model: getModel(provider, apiKey, modelId) as any,
-    instructions: `You are an expert outreach copywriter. Given a resume and a job description, fill in the template values for a cold email and a cold DM.
+  return executeWithModelFallback(
+    provider,
+    apiKey,
+    modelId,
+    "Outreach Messages",
+    async (model) => {
+      const { output } = await generateText({
+        model: model as any,
+        instructions: `You are an expert outreach copywriter. Given a resume and a job description, fill in the template values for a cold email and a cold DM.
 
 RULES:
 - Extract the company name and role title from the job description
@@ -90,10 +77,11 @@ RULES:
 - portfolioLink/githubLink/linkedinLink: Use the actual links from the resume, or "N/A" if not provided
 - Keep all values concise and natural
 - senderName and recipientName should use the actual names`,
-    prompt: `RESUME:\n${resumeSummary}\n\nJOB DESCRIPTION:\n${jobDescription}`,
-    output: Output.object({ schema: outreachValuesSchema }),
-    maxRetries: 1,
-  });
-
-  return output;
+        prompt: `RESUME:\n${resumeSummary}\n\nJOB DESCRIPTION:\n${jobDescription}`,
+        output: Output.object({ schema: outreachValuesSchema }),
+        maxRetries: 1,
+      });
+      return output;
+    }
+  );
 }

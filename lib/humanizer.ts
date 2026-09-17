@@ -4,29 +4,10 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { Resume } from "@/lib/schemas/resume";
-import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+import type { Provider } from "@/lib/ai-models";
+import { executeWithModelFallback } from "@/lib/ai-runner";
 
-function getModel(provider: Provider, apiKey: string, modelId?: string) {
-  const cleanApiKey = (apiKey || "").replace(/[^\x20-\x7E]/g, "").trim();
-  const model = modelId || DEFAULT_MODEL[provider];
-  if (provider === "google") {
-    const google = createGoogleGenerativeAI({ apiKey: cleanApiKey });
-    return google(model);
-  }
-  if (provider === "anthropic") {
-    const anthropic = createAnthropic({ apiKey: cleanApiKey });
-    return anthropic(model);
-  }
-  if (provider === "perplexity") {
-    const perplexity = createOpenAI({
-      apiKey: cleanApiKey,
-      baseURL: "https://api.perplexity.ai",
-    });
-    return perplexity(model);
-  }
-  const openai = createOpenAI({ apiKey: cleanApiKey });
-  return openai(model);
-}
+// getModel is now handled by @/lib/ai-runner with universal fallback
 
 export const HUMANIZER_SYSTEM_PROMPT = `You are an expert human prose editor implementing the Humanizer system (based on Wikipedia's "Signs of AI writing" and blader/humanizer).
 
@@ -70,8 +51,6 @@ export async function humanizeProse(
   modelId?: string,
   voiceSample?: string
 ): Promise<string> {
-  const model = getModel(provider, apiKey, modelId);
-
   const prompt = [
     voiceSample
       ? `Here is a sample of the author's personal writing style and cadence for voice matching:\n${voiceSample}\n\n`
@@ -82,14 +61,21 @@ export async function humanizeProse(
     .filter(Boolean)
     .join("");
 
-  const response = await generateText({
-    model: model as any,
-    system: HUMANIZER_SYSTEM_PROMPT,
-    prompt,
-    temperature: 0.3,
-  });
-
-  return response.text.trim();
+  return executeWithModelFallback(
+    provider,
+    apiKey,
+    modelId,
+    "Humanize Prose",
+    async (model) => {
+      const response = await generateText({
+        model: model as any,
+        system: HUMANIZER_SYSTEM_PROMPT,
+        prompt,
+        temperature: 0.3,
+      });
+      return response.text.trim();
+    }
+  );
 }
 
 const humanizedBulletsSchema = z.object({
@@ -103,8 +89,6 @@ export async function humanizeResume(
   apiKey: string,
   modelId?: string
 ): Promise<Resume> {
-  const model = getModel(provider, apiKey, modelId);
-
   const payload = {
     experiences: resume.experience.map((e) => ({
       company: e.company,
@@ -133,12 +117,21 @@ CRITICAL RULES:
    - experienceBullets must be an array of string arrays matching the exact count and order of the provided experiences.
    - projectBullets must be an array of string arrays matching the exact count and order of the provided projects.`;
 
-  const { output } = await generateText({
-    model: model as any,
-    system: systemPrompt,
-    prompt: `Please humanize the bullet points for the following experiences and projects:\n\n${JSON.stringify(payload, null, 2)}`,
-    output: Output.object({ schema: humanizedBulletsSchema }),
-  });
+  const output = await executeWithModelFallback(
+    provider,
+    apiKey,
+    modelId,
+    "Humanize Resume",
+    async (model) => {
+      const { output: resOutput } = await generateText({
+        model: model as any,
+        system: systemPrompt,
+        prompt: `Please humanize the bullet points for the following experiences and projects:\n\n${JSON.stringify(payload, null, 2)}`,
+        output: Output.object({ schema: humanizedBulletsSchema }),
+      });
+      return resOutput;
+    }
+  );
 
   return {
     ...resume,
