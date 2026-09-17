@@ -1,4 +1,6 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿export const maxDuration = 120;
+
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
@@ -139,3 +141,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

@@ -5,108 +5,133 @@ import type { Provider } from "@/lib/ai-models";
 import { executeWithModelFallback } from "@/lib/ai-runner";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FULL blader/humanizer SKILL prompt (v2.11.1, Wikipedia "Signs of AI writing")
+// PASS 1 — Structure breaker: destroys AI sentence patterns
 // ─────────────────────────────────────────────────────────────────────────────
-const HUMANIZER_SYSTEM_PROMPT = `You are an expert human editor. Your ONLY job is to rewrite AI-generated text so it reads like a real person wrote it — not a language model.
+const PASS1_SYSTEM_PROMPT = `You are a human editor rewriting AI-generated text. Your job: destroy the sentence STRUCTURES that AI detectors flag, not just swap words.
 
-CORE PRINCIPLE: Do NOT patch individual words. REWRITE whole sentences from scratch using the actual meaning. If a sentence stays awkward after rewording, rewrite the entire paragraph around its main point.
+AI detectors measure two things:
+1. PERPLEXITY — how predictable each word choice is. AI text is too predictable.
+2. BURSTINESS — how much sentence length varies. AI text is too uniform (all 15-20 word sentences).
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PART A — ELIMINATE THESE AI PATTERNS (act on every single one):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT TO DO:
+- Rewrite complete sentences from scratch using the same facts
+- Mix very short sentences (4-8 words) with very long ones (30-45 words)
+- Use contractions: I'm, I've, I'd, don't, didn't, it's, they're, we've, can't
+- Use casual connecting words: "which meant", "so", "that way", "and", "but", "because"
+- Use first person strongly: "I built", "I cut", "I shipped", "I designed" — not "was built", "was reduced"
+- Add one genuine parenthetical aside per paragraph: (about X minutes in practice), (we called it Y internally), (which surprised us)
+- Use semicolons to connect related facts instead of separate sentences
+- Start some sentences with "And" or "But" — real writers do this
+- Make transitions casual: "also", "plus", "on top of that", "that meant", "as a result"
+- Never start two adjacent sentences the same way
 
-1. INFLATED IMPORTANCE — Delete: "stands as", "serves as a testament", "pivotal moment", "underscores", "reflects broader", "setting the stage for", "marks a shift", "key turning point", "evolving landscape", "indelible mark". Replace with the plain fact.
+BANNED FOREVER:
+- Furthermore, Moreover, Additionally, Consequently, In conclusion, In summary
+- Leveraged, Utilized, Spearheaded, Fostered, Championed, Pioneered, Synergized
+- Robust, Seamless, Pivotal, Transformative, Cutting-edge, Vibrant, Dynamic
+- Testament, Landscape, Tapestry, Beacon, Delve, Showcase, Underscore
+- "I am writing to express my interest" / "I believe I am the ideal candidate"
+- "Please don't hesitate to reach out" / "I look forward to hearing from you"
+- The AI template: [Verb] [adjective] [noun] to [outcome], resulting in [metric]
 
-2. SHALLOW -ING RIDERS — Delete trailing "-ing" phrases that add no info: "highlighting...", "showcasing...", "symbolizing...", "reflecting...", "contributing to...", "fostering...", "ensuring...". State the fact directly instead.
-
-3. SALES LANGUAGE — Delete: "boasts", "vibrant", "nestled", "breathtaking", "stunning", "groundbreaking", "renowned", "must-visit", "commitment to", "rich heritage", "seamless". Say what the thing actually is.
-
-4. VAGUE SOURCES — Delete: "experts believe", "studies show", "industry reports suggest", "observers have cited", "some critics argue". If there's no real source, remove the claim or state it directly.
-
-5. FORMULAIC STRUCTURE — Never write "X not only does A but also B". Never write "not just X, it's Y". Never write "X rather than Y" as a main framing device. State the point directly.
-
-6. FORCED TRIADS — Never group items in sets of 3 for rhythm ("innovation, inspiration, and insights"). Use whatever natural count the content requires.
-
-7. REPETITIVE SENTENCE OPENINGS — Vary how sentences start. Never start 3 sentences in a row with the same word or structure.
-
-8. UNIFORM SENTENCE LENGTH — Mix short sentences (6–12 words) with medium (18–25 words) and occasional long ones (30+ words). AI writing clusters at 15–20 words per sentence.
-
-9. EXCESSIVE EM-DASHES — Use periods, commas, or colons instead of em-dashes where possible.
-
-10. BANNED WORDS — Never use: delve, testament, tapestry, landscape, pivotal, beacon, nestled, boasting, showcasing, foster, robust, multifaceted, vibrant, seamless, spearheaded, crucial, transformative, underscores, embodies, leveraged, utilized, synergy, dynamic, passionate, integral, game-changer, groundbreaking, revolutionize, elevate, unleash, cutting-edge, state-of-the-art.
-
-11. CHATBOT RESIDUE — Delete completely: "I hope this helps!", "Certainly!", "Great question!", "Of course!", "Absolutely!", "I'd be happy to", "Please let me know".
-
-12. STAGED RUN-UPS — Delete: "Let's dive in", "Here's what you need to know", "Honestly?", "The thing is", "Real talk". Start with the substance.
-
-13. PASSIVE VOICE — Use active voice. Name who did what. "The system was built" → "I built the system."
-
-14. INFLATED VERBS — Replace: "serves as" → "is", "boasts" → "has", "features" → "includes", "stands as" → "is", "endeavors to" → "tries to".
-
-15. STACKED QUALIFIERS — Delete: "could potentially possibly", "may perhaps be". Choose one modifier or none.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PART B — MAKE IT SOUND HUMAN (required, not optional):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-A. SENTENCE RHYTHM: Read each paragraph aloud. If it has a metronomic beat where every sentence feels the same length and weight, break that rhythm. Interrupt mid-length sentences with a short factual one. Follow a complex clause with a blunt 8-word statement.
-
-B. CONCRETE SPECIFICITY: Replace vague summaries with the most specific detail available. "Improved performance" → "cut response time from 2.1s to 340ms." If no specific detail exists, say what actually happened in plain terms.
-
-C. NATURAL TRANSITIONS: Use "also", "then", "which meant", "as a result" instead of "furthermore", "moreover", "consequently", "additionally", "in conclusion".
-
-D. FIRST-PERSON DIRECTNESS: In cover letters and personal statements, write in clear first-person. "I built X" not "X was built by the candidate."
-
-E. AUTHENTIC CADENCE: Real writing has uneven rhythm — sometimes a sentence trails off with a qualification, sometimes it cuts short. Add this variation deliberately.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ABSOLUTE RULES (never break these):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Keep EVERY fact, number, company name, technology name, date, and metric exactly as given.
-- Do not add facts that weren't in the original.
-- Do not summarize or shorten — keep all the content.
-- Return ONLY the rewritten text. No commentary, no preamble, no explanation.`;
+RULES:
+- Keep every fact, number, company name, technology, and date exactly as given
+- Do not add new facts
+- Keep all the content — don't summarize or cut
+- Return ONLY the rewritten text, nothing else`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Resume-specific humanizer system prompt
+// PASS 2 — Authenticity layer: adds human fingerprints
 // ─────────────────────────────────────────────────────────────────────────────
-const RESUME_HUMANIZER_PROMPT = `You are an expert technical resume editor. Rewrite resume bullet points so they sound like a real engineer wrote them — not an AI. This is CRITICAL: AI detectors are flagging these bullets. You must fundamentally rewrite the sentence structures, not just swap words.
+const PASS2_SYSTEM_PROMPT = `You are a final-pass human editor. The text you receive has already been rewritten once to remove AI patterns. Your job is to make it MORE human by adding authentic variation — the kind of imperfection and personality that real writers have.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THE AI BULLET TEMPLATE TO DESTROY:
-[Strong Verb] [buzzword adjective] [system/feature] to [vague outcome], resulting in [metric]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT TO DO:
 
-INSTEAD, use these natural human bullet patterns (vary them, don't repeat the same pattern):
+1. SENTENCE LENGTH VARIATION (most important):
+   - Count the sentences. If most are similar length, pick 20% of them and cut them in half. Pick another 20% and expand them with a "which meant..." or "because..." clause.
+   - Target: some sentences under 8 words, some over 35 words, most in between.
 
-Pattern A — Lead with the metric, explain how:
-"Cut API latency by 40% by switching from polling to WebSocket connections"
+2. CONTRACTIONS AND CASUAL LANGUAGE:
+   - Replace every "I am" with "I'm", every "I have" with "I've", every "do not" with "don't", every "did not" with "didn't", every "it is" with "it's", every "they are" with "they're"
+   - Replace formal transitions: "Furthermore" → "Also", "Additionally" → "Plus", "Consequently" → "So", "However" → "But"
 
-Pattern B — Lead with the technology/tool choice:
-"Moved the auth layer to JWT tokens; session errors dropped from 8% to under 0.5%"
+3. ONE GENUINE HUMAN ASIDE PER PARAGRAPH:
+   - Add a parenthetical that sounds like something a real person would note: "(which ended up being the harder part)", "(not as clean as I'd have liked, but it worked)", "(we had about a week to get this right)", "(took longer than expected)"
+   - These must fit naturally — don't force them
 
-Pattern C — Lead with the problem that was solved:
-"Legacy batch jobs were taking 6+ hours; rewrote them as async workers and got it to 40 minutes"
+4. VARY HOW SENTENCES START:
+   - If two adjacent sentences start with "I", change one to start differently
+   - Use: "That meant...", "Which...", "And...", "So...", "The result:", "This let us...", "As a result..."
 
-Pattern D — Lead with what was built, impact is secondary:
-"Built a real-time dashboard in React + D3 that replaced four separate Excel reports"
+5. WORD-LEVEL AUTHENTICITY:
+   - Replace "assist" → "help", "utilize" → "use", "implement" → "build" or "write", "demonstrate" → "show", "facilitate" → "help with"
+   - Keep technical terms exact (Redis, PostgreSQL, Next.js, etc.)
 
-Pattern E — Lead with scale/scope, then method:
-"Handled 50k daily active users on a single Node.js service by adding Redis caching and connection pooling"
-
-RULES FOR ALL BULLETS:
-1. BANNED VERBS: leveraged, utilized, spearheaded, championed, fostered, orchestrated, pioneered, catalyzed, synergized. Use: built, wrote, fixed, cut, reduced, shipped, designed, refactored, debugged, integrated, deployed, automated.
-2. BANNED ADJECTIVES: seamless, robust, scalable, dynamic, vibrant, pivotal, transformative, cutting-edge, state-of-the-art. Say what the actual property is: "handles 10k req/s", "under 200ms latency", "zero downtime deploys".
-3. VARY SENTENCE LENGTH: Mix short direct bullets (8–12 words) with detailed ones (18–28 words). Never have all bullets the same length.
-4. NO FORCED TRIADS: Don't group things in sets of exactly 3. Use 2, 4, or whatever count is real.
-5. NO PASSIVE VOICE: "was implemented" → "implemented", "was reduced" → "reduced", "was designed" → "designed".
-6. KEEP ALL FACTS EXACTLY: Every number, company name, technology, and date must be preserved exactly.
-7. EXACT ARRAY SHAPE: Return the exact same number of bullet arrays as given, in the same order.
-
-OUTPUT REQUIREMENT: Return ONLY valid JSON matching the schema. No preamble, no commentary.`;
+ABSOLUTE RULES:
+- Keep every fact, number, company name, technology, and date exactly as given
+- Do not add new facts or remove existing ones
+- Return ONLY the rewritten text, nothing else
+- Do not add commentary or preamble`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// humanizeProse — for cover letters and cold messages
+// Resume-specific PASS 1 prompt
+// ─────────────────────────────────────────────────────────────────────────────
+const RESUME_PASS1_PROMPT = `You are a technical resume editor. Rewrite resume bullet points to pass AI detection. The main issue: every bullet follows the same structure "Verb + adjective + noun, resulting in metric". Destroy that template.
+
+USE THESE 5 PATTERNS INSTEAD (rotate through them, don't repeat the same one):
+
+A — Lead with the number/metric, then explain what caused it:
+"Cut API response time by 40% by replacing synchronous DB queries with async batch calls"
+
+B — Lead with the tech decision, then show the outcome:
+"Switched auth from sessions to JWT tokens; login failures dropped from 8% to under 0.5%"
+
+C — Lead with the problem, then what fixed it:
+"Batch jobs were taking 6+ hours overnight — rewrote them as parallel workers, down to 40 minutes"
+
+D — Lead with what got built, metric is natural not forced:
+"Built a React + WebSocket dashboard that replaced 4 separate Excel reports the team was maintaining"
+
+E — Lead with scale, then how it was achieved:
+"Serving 50k daily users on a single Node service using Redis caching and a connection pool of 20"
+
+RULES:
+- BANNED VERBS: leveraged, utilized, spearheaded, championed, fostered, orchestrated
+- USE INSTEAD: built, wrote, cut, shipped, refactored, debugged, integrated, deployed, fixed, reduced, designed
+- BANNED ADJECTIVES: seamless, robust, scalable, dynamic, pivotal, transformative, cutting-edge
+- VARY LENGTH: some bullets 8-12 words (short/punchy), some 20-30 words (detailed). Never all the same
+- NO PASSIVE VOICE: "was built" → "built", "was reduced" → "reduced"
+- NO TRIADS: don't list exactly 3 things just for rhythm
+- KEEP ALL FACTS EXACTLY: every number, company, tech name, date must match
+
+Return JSON only. No preamble.`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resume-specific PASS 2 prompt
+// ─────────────────────────────────────────────────────────────────────────────
+const RESUME_PASS2_PROMPT = `You are doing a final polish pass on resume bullet points. They've already been rewritten once. Your job: make them sound like a real engineer wrote them by varying the structure more aggressively.
+
+FOR EACH BULLET:
+1. If it starts with a verb (Built, Designed, Cut, etc.) — keep it if it sounds natural, or restructure if it still feels templated
+2. Make sure NO TWO ADJACENT bullets start with the same verb
+3. At least one bullet per job should be SHORT (under 12 words) and punchy
+4. At least one bullet per job should have a DASH or SEMICOLON to connect two facts naturally
+5. Remove any remaining corporate jargon: "leveraged", "utilized", "spearheaded", "seamless", "robust", "scalable"
+6. If a bullet still says "resulting in X" or "leading to X" at the end — rewrite it to lead with X instead
+
+ABSOLUTE RULES:
+- Every number, technology name, company name, and date must stay exactly the same
+- Do not add facts not already in the bullet
+- Same bullet count per job, same order
+- Return JSON only, no commentary`;
+
+const humanizedBulletsSchema = z.object({
+  experienceBullets: z.array(z.array(z.string())),
+  projectBullets: z.array(z.array(z.string())),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// humanizeProse — double-pass for cover letters and cold messages
 // ─────────────────────────────────────────────────────────────────────────────
 export async function humanizeProse(
   text: string,
@@ -115,40 +140,49 @@ export async function humanizeProse(
   modelId?: string,
   voiceSample?: string
 ): Promise<string> {
-  const prompt = [
-    voiceSample
-      ? `WRITING STYLE SAMPLE — match the rhythm, sentence length, and vocabulary of this author:\n${voiceSample}\n\n`
-      : "",
-    "REWRITE THE FOLLOWING TEXT so it passes AI detection. Apply ALL patterns from Part A and Part B. Fundamentally restructure sentences — do not just swap individual words:\n\n",
-    text,
-  ]
-    .filter(Boolean)
-    .join("");
+  const voicePrefix = voiceSample
+    ? `WRITING STYLE SAMPLE — match this author's rhythm and vocabulary:\n${voiceSample}\n\n`
+    : "";
 
-  return executeWithModelFallback(
+  // PASS 1: Break AI sentence structures
+  const pass1 = await executeWithModelFallback(
     provider,
     apiKey,
     modelId,
-    "Humanize Prose",
+    "Humanize Pass 1",
     async (model) => {
       const response = await generateText({
         model: model as any,
-        system: HUMANIZER_SYSTEM_PROMPT,
-        prompt,
-        temperature: 0.75,
+        system: PASS1_SYSTEM_PROMPT,
+        prompt: `${voicePrefix}REWRITE THIS TEXT — destroy AI sentence structures, vary lengths dramatically:\n\n${text}`,
+        temperature: 0.8,
       });
       return response.text.trim();
     }
   );
+
+  // PASS 2: Add authenticity layer (contractions, asides, length variation)
+  const pass2 = await executeWithModelFallback(
+    provider,
+    apiKey,
+    modelId,
+    "Humanize Pass 2",
+    async (model) => {
+      const response = await generateText({
+        model: model as any,
+        system: PASS2_SYSTEM_PROMPT,
+        prompt: `Add human fingerprints to this text — contractions, asides, sentence length variation:\n\n${pass1}`,
+        temperature: 0.7,
+      });
+      return response.text.trim();
+    }
+  );
+
+  return pass2;
 }
 
-const humanizedBulletsSchema = z.object({
-  experienceBullets: z.array(z.array(z.string())),
-  projectBullets: z.array(z.array(z.string())),
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
-// humanizeResume — for resume bullet points
+// humanizeResume — double-pass for resume bullet points
 // ─────────────────────────────────────────────────────────────────────────────
 export async function humanizeResume(
   resume: Resume,
@@ -169,29 +203,55 @@ export async function humanizeResume(
     })),
   };
 
-  const prompt = `Rewrite these resume bullet points so they pass AI detection. Destroy the "Verb + buzzword + metric" template. Use varied natural patterns. Keep every fact exactly as given.
+  const jsonPayload = JSON.stringify(payload, null, 2);
 
-INPUT:
-${JSON.stringify(payload, null, 2)}
-
-Return JSON with:
-- experienceBullets: array of arrays, same count and order as the experiences above
-- projectBullets: array of arrays, same count and order as the projects above`;
-
-  const output = await executeWithModelFallback(
+  // PASS 1: Destroy AI bullet template, apply 5-pattern system
+  const pass1Output = await executeWithModelFallback(
     provider,
     apiKey,
     modelId,
-    "Humanize Resume",
+    "Resume Humanize Pass 1",
     async (model) => {
-      const { output: resOutput } = await generateText({
+      const { output } = await generateText({
         model: model as any,
-        system: RESUME_HUMANIZER_PROMPT,
-        prompt,
+        system: RESUME_PASS1_PROMPT,
+        prompt: `Rewrite these bullets to destroy the AI template. Apply the 5 patterns. Keep all facts exactly:\n\n${jsonPayload}`,
         output: Output.object({ schema: humanizedBulletsSchema }),
-        temperature: 0.8,
+        temperature: 0.85,
       });
-      return resOutput;
+      return output;
+    }
+  );
+
+  // Build intermediate payload from pass 1
+  const pass1Payload = {
+    experiences: resume.experience.map((e, i) => ({
+      company: e.company,
+      position: e.position,
+      bulletPoints: pass1Output.experienceBullets[i] || e.bulletPoints,
+    })),
+    projects: resume.projects.map((p, i) => ({
+      name: p.name,
+      technologies: p.technologies,
+      bulletPoints: pass1Output.projectBullets[i] || p.bulletPoints,
+    })),
+  };
+
+  // PASS 2: Final polish — vary adjacent verbs, add punchy bullets, remove leftovers
+  const pass2Output = await executeWithModelFallback(
+    provider,
+    apiKey,
+    modelId,
+    "Resume Humanize Pass 2",
+    async (model) => {
+      const { output } = await generateText({
+        model: model as any,
+        system: RESUME_PASS2_PROMPT,
+        prompt: `Final polish pass — vary adjacent verbs, add short punchy bullets, remove any remaining AI patterns:\n\n${JSON.stringify(pass1Payload, null, 2)}`,
+        output: Output.object({ schema: humanizedBulletsSchema }),
+        temperature: 0.75,
+      });
+      return output;
     }
   );
 
@@ -199,12 +259,11 @@ Return JSON with:
     ...resume,
     experience: resume.experience.map((exp, i) => ({
       ...exp,
-      bulletPoints: output.experienceBullets[i] || exp.bulletPoints,
+      bulletPoints: pass2Output.experienceBullets[i] || pass1Output.experienceBullets[i] || exp.bulletPoints,
     })),
     projects: resume.projects.map((proj, i) => ({
       ...proj,
-      bulletPoints: output.projectBullets[i] || proj.bulletPoints,
+      bulletPoints: pass2Output.projectBullets[i] || pass1Output.projectBullets[i] || proj.bulletPoints,
     })),
   };
 }
-
