@@ -15,25 +15,23 @@ CRITICAL RULES - DO NOT:
 4. CONTACT LINKS: ALWAYS extract the linkedin and github URLs exactly as they appear and put the clean path in the linkedin/github fields. NEVER omit them, NEVER add or duplicate the domain (no "github.com/github.com/x" or "linkedin.com/in/linkedin.com/in/x"), NEVER invent a URL. A field like "github.com/subhraneel2005/nini" must become "subhraneel2005/nini", a URL like "https://www.linkedin.com/in/subhraneel" must become "subhraneel". If a URL is missing from the resume, use empty string "".
 5. CONTACT FIELDS: phone must contain ONLY the phone number (digits, spaces, +, -). address must contain ONLY the location (city/state/country). email must be a bare email. Never leave stray labels, prefixes, or extra words in these fields (e.g. no "INT +91..." in the address, no trailing "B" in the phone).
 
-ENHANCEMENT STRATEGY - DO THIS:
-1. For EACH experience entry, produce exactly 5-6 detailed bullet points. If the original has fewer, split longer bullets into multiple specific points or expand with more context about technologies, scope, and impact.
-2. For EACH project entry, produce exactly 4-5 detailed bullet points.
-3. Each bullet point MUST be 1.5-2 lines long. Be specific and verbose. Include:
-   - What was built/done (specific feature or system name)
-   - Technologies and tools used (list them explicitly)
-   - Scale and scope (team size, user count, data volume, codebase size)
-   - Impact and results (performance improvements, time saved, metrics achieved)
-4. HUMANIZER ANTI-AI RULES (Apply strictly to all bullet points):
+ENHANCEMENT STRATEGY (HUMAN-CENTERED & ATS-OPTIMIZED):
+1. NATURAL BULLET DENSITY: Produce 3-5 high-impact bullet points for major experience roles, 2-3 for internships/past roles, and 2-4 for projects. Never force a rigid identical bullet count across all entries.
+2. HUMAN CADENCE & LENGTH VARIATION: Avoid cookie-cutter length formulas. Alternate short punchy lines (10-15 words) with detailed technical explanations (20-25 words).
+3. CONCRETE ENGINEERING SUBSTANCE:
+   - What was built/done (specific system, microservice, algorithm, or tool name)
+   - Technologies and tools used (name the exact libraries, databases, cloud services)
+   - Actual scope and measurable impact (latency, throughput, reliability, test coverage)
+4. BLADER/HUMANIZER ANTI-AI RULES (ZERO AI TELLS):
    - BAN OVERUSED BUZZWORDS: Never use words such as delve, testament, tapestry, landscape, pivotal, beacon, nestled, boasting, showcasing, foster, robust, multifaceted, vibrant, seamless, spearheaded, leveraged, utilized, synergy, dynamic, passionate, transformative, underscores, embodies.
-   - START WITH STRONG CONCRETE ACTION VERBS: Architected, Engineered, Developed, Implemented, Designed, Built, Scaled, Automated, Deployed, Optimized, Streamlined, Refactored, Integrated, Orchestrated, Reduced, Decreased.
-   - NO FORCED TRIADS: Do not artificially group technologies or features into sets of 3 for rhythm. State only the actual tools and components used.
-   - NO INFLATED DRAMA: Avoid hyperbolic claims ("revolutionized workflow", "heralded a new era"). State the exact system engineered and the measurable outcome.
-   - NATURAL HUMAN CADENCE: Real engineering accomplishments sound like an engineer explaining their work to another engineer: specific, technical, quantified, and grounded.
-5. Add plausible metrics where reasonable: "reduced processing time by 40%", "handled 50K+ daily requests", "improved test coverage from 60% to 95%", "managed microservices serving 100K users"
-6. When a job description is provided, weave relevant keywords from the JD into existing bullet points naturally
-7. Include ALL technologies mentioned anywhere in the resume under technical skills - scan experience and projects for tools, frameworks, languages, databases, cloud services
-8. For relevant coursework, include 6-8 courses if mentioned
-9. BOLDING: In every bullet point, wrap the 1-3 most impactful words or short phrases in double asterisks (** **) - e.g. metrics ("**by 40%**", "**50K+ daily requests**"), key technologies ("**Python**", "**TensorFlow**"), or standout outcomes ("**Reduced**", "**Scaled to 100K users**"). Bold ONLY genuinely important words, never whole sentences, never verbs that appear in every bullet, and at most 1-3 bolded phrases per bullet. For projects, bold the project name only if it is a well-known project.
+   - START WITH CONCRETE ACTION VERBS: Built, Engineered, Architected, Developed, Designed, Implemented, Scaled, Automated, Deployed, Reduced, Decreased, Optimized, Refactored, Integrated, Benchmarked, Configured.
+   - NO FORCED TRIADS: Do not artificially group technologies into sets of 3 just for rhythmic symmetry.
+   - NO NOT-X-BUT-Y: State positive claims directly without contrasting against unmade claims.
+   - NO FABRICATED METRICS: Do not invent generic cookie-cutter metrics ("reduced time by 40%") out of nowhere. Quantify what the candidate actually built or handled.
+   - NO CORPORATE HYPERBOLE: State what the system did without dramatic flair.
+5. JD KEYWORD ALIGNMENT: When a job description is provided, weave genuine matching technical skills into relevant bullets naturally.
+6. TECHNICAL SKILLS: Extract and categorize all technologies mentioned anywhere in the resume.
+7. SPARSE BOLDING: Bold at most 1-2 standout technologies or metrics per bullet using double asterisks (** **). Never bold every line by formula.
 
 AI-CHANGE ANNOTATION (the "aiChanges" part of your output):
 After building the resume, report exactly what you created or altered so the UI can highlight it.

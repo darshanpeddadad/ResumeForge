@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { parseResumeWithLLM } from "@/lib/llm";
+import { humanizeResume } from "@/lib/humanizer";
 import { buildHighlights } from "@/lib/highlights";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { generateCoverLetter } from "@/lib/cover-letter-generator";
+import { humanizeProse } from "@/lib/humanizer";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import type { Resume } from "@/lib/schemas/resume";
@@ -51,54 +52,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let coverLetter;
+    const coverLetter = await generateCoverLetter(
+      resume as Resume,
+      jobDescription,
+      provider,
+      apiKey,
+      modelId,
+      pastCoverLetter
+    );
+
+    // Automatically run the blader/humanizer engine on the cover letter text
     try {
-      coverLetter = await generateCoverLetter(
-        resume as Resume,
-        jobDescription,
+      const humanizedText = await humanizeProse(
+        coverLetter.fullText,
         provider,
         apiKey,
-        modelId,
-        pastCoverLetter
+        modelId
       );
-    } catch (primaryErr) {
-      if (provider === "google") {
-        const fallbacks = [
-          "gemini-3.6-flash",
-          "gemini-3.5-flash-lite",
-          "gemini-3.5-flash",
-          "gemini-3.7-flash",
-        ].filter((m) => m !== modelId);
-
-        let fallbackSuccess = false;
-        let lastError = primaryErr;
-
-        for (const fbModel of fallbacks) {
-          safeLog.warn(
-            `Primary cover letter model ${modelId} failed (${(primaryErr as Error).message}), attempting fallback to ${fbModel}...`
-          );
-          try {
-            coverLetter = await generateCoverLetter(
-              resume as Resume,
-              jobDescription,
-              provider,
-              apiKey,
-              fbModel,
-              pastCoverLetter
-            );
-            fallbackSuccess = true;
-            break;
-          } catch (fbErr) {
-            lastError = fbErr;
-          }
-        }
-
-        if (!fallbackSuccess) {
-          throw lastError;
-        }
-      } else {
-        throw primaryErr;
+      if (humanizedText) {
+        coverLetter.fullText = humanizedText;
       }
+    } catch (hErr) {
+      safeLog.warn("Cover letter auto-humanize fallback:", hErr);
     }
 
     return NextResponse.json({ coverLetter });
