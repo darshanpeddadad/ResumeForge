@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
@@ -149,11 +149,10 @@ export default function GeneratePage() {
         })
           .then(async (outreachResponse) => {
             if (outreachResponse.ok) {
-              const { outreach } = await outreachResponse.json()
-              const emailData: ColdEmail = outreach.coldEmail
-              const dmData: ColdDM = outreach.coldDM
-              setColdEmail(renderColdEmail(emailData))
-              setColdDM(renderColdDM(dmData))
+              const data = await outreachResponse.json()
+              // Use server-side rendered + humanized text if available
+              setColdEmail(data.coldEmailText || renderColdEmail(data.outreach?.coldEmail))
+              setColdDM(data.coldDMText || renderColdDM(data.outreach?.coldDM))
             }
           })
           .catch((err) => console.error("Outreach generation failed", err))
@@ -442,3 +441,4 @@ export default function GeneratePage() {
     </div>
   )
 }
+

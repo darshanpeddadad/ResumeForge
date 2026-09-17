@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
@@ -109,7 +109,14 @@ export async function POST(request: NextRequest) {
       throw new Error("Resume generation produced no output");
     }
 
-    const { resume, aiChanges } = result;
+    let { resume, aiChanges } = result;
+
+    // Automatically run the blader/humanizer engine on the resume bullet points
+    try {
+      resume = await humanizeResume(resume, provider, apiKey, modelId);
+    } catch (hErr) {
+      safeLog.warn("Resume auto-humanize fallback:", hErr);
+    }
 
     const highlights = buildHighlights(
       aiChanges,

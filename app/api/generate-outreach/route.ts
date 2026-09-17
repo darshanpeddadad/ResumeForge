@@ -1,11 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { generateOutreach } from "@/lib/outreach-generator";
+import { humanizeProse } from "@/lib/humanizer";
+import { renderColdEmail, renderColdDM } from "@/lib/template-renderer";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import type { Resume } from "@/lib/schemas/resume";
+import type { ColdEmail, ColdDM } from "@/lib/schemas/outreach";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
 
@@ -62,7 +65,34 @@ export async function POST(request: NextRequest) {
       modelId
     );
 
-    return NextResponse.json({ outreach });
+    // Render the template values into prose strings
+    const emailData = outreach.coldEmail as ColdEmail;
+    const dmData = outreach.coldDM as ColdDM;
+    let coldEmailText = renderColdEmail(emailData);
+    let coldDMText = renderColdDM(dmData);
+
+    // Automatically run the blader/humanizer engine on both messages
+    try {
+      const [humanizedEmail, humanizedDM] = await Promise.allSettled([
+        humanizeProse(coldEmailText, provider, apiKey, modelId),
+        humanizeProse(coldDMText, provider, apiKey, modelId),
+      ]);
+      if (humanizedEmail.status === "fulfilled" && humanizedEmail.value) {
+        coldEmailText = humanizedEmail.value;
+      }
+      if (humanizedDM.status === "fulfilled" && humanizedDM.value) {
+        coldDMText = humanizedDM.value;
+      }
+    } catch (hErr) {
+      safeLog.warn("Outreach auto-humanize fallback:", hErr);
+    }
+
+    // Return rendered + humanized strings alongside structured data
+    return NextResponse.json({
+      outreach,
+      coldEmailText,
+      coldDMText,
+    });
   } catch (error) {
     safeLog.error("Generate outreach error:", error);
     const info = describeLlmError(error);

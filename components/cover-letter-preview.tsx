@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { pdf, Document, Page, Text, StyleSheet } from "@react-pdf/renderer";
@@ -10,7 +10,6 @@ import { CloudDownloadIcon } from "@/components/ui/cloud-download";
 import { File01Icon } from "@/components/ui/file-01";
 import { RefreshIcon } from "@/components/ui/refresh";
 import { UndoIcon } from "@/components/ui/undo";
-import { MagicWand01Icon } from "@/components/ui/magic-wand-01";
 import type { CoverLetterResult } from "@/lib/cover-letter-generator";
 import { generateCoverLetterDocx } from "@/lib/docx-renderer";
 
@@ -51,7 +50,6 @@ export function CoverLetterPreview({ coverLetter }: CoverLetterPreviewProps) {
   const [copied, setCopied] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
-  const [isHumanizing, setIsHumanizing] = useState(false);
   const [showRationale, setShowRationale] = useState(false);
 
   const isEdited = text !== coverLetter.fullText;
@@ -62,30 +60,6 @@ export function CoverLetterPreview({ coverLetter }: CoverLetterPreviewProps) {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleHumanize = async () => {
-    if (!text.trim()) return;
-    setIsHumanizing(true);
-    try {
-      const res = await fetch("/api/humanize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || `Failed to humanize text (${res.status})`);
-      }
-      if (data?.humanized) {
-        setText(data.humanized);
-      }
-    } catch (err) {
-      console.error("Humanize error:", err);
-      alert(err instanceof Error ? err.message : "Failed to humanize text.");
-    } finally {
-      setIsHumanizing(false);
-    }
   };
 
   const handleDownloadTxt = () => {
@@ -176,20 +150,6 @@ export function CoverLetterPreview({ coverLetter }: CoverLetterPreviewProps) {
               Reset
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleHumanize}
-            disabled={isHumanizing}
-            title="Audit and remove AI writing patterns using Humanizer"
-          >
-            {isHumanizing ? (
-              <RefreshIcon size={14} className="mr-1.5 shrink-0 animate-spin" />
-            ) : (
-              <MagicWand01Icon size={14} className="mr-1.5 shrink-0 text-amber-500" />
-            )}
-            {isHumanizing ? "Humanizing..." : "Humanize"}
-          </Button>
           <Button variant="outline" size="sm" onClick={handleDownloadTxt}>
             <CloudDownloadIcon size={14} className="mr-1.5 shrink-0" />
             .txt
@@ -241,7 +201,7 @@ export function CoverLetterPreview({ coverLetter }: CoverLetterPreviewProps) {
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground pt-1">
           <div className="flex items-center gap-3">
             <span>{wordCount} words</span>
-            <span>•</span>
+            <span>·</span>
             <span>{charCount} characters</span>
             <span className="italic text-muted-foreground/80">(Editable in-place)</span>
           </div>
@@ -265,7 +225,7 @@ export function CoverLetterPreview({ coverLetter }: CoverLetterPreviewProps) {
             <ul className="space-y-1.5 text-xs text-foreground">
               {coverLetter.whyMatched.map((reason, idx) => (
                 <li key={idx} className="flex items-start gap-2">
-                  <span className="text-primary font-bold">•</span>
+                  <span className="text-primary font-bold">→</span>
                   <span>{reason}</span>
                 </li>
               ))}

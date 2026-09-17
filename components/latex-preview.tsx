@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { pdf } from "@react-pdf/renderer";
@@ -10,9 +10,6 @@ import { CloudDownloadIcon } from "@/components/ui/cloud-download";
 import { Copy01Icon } from "@/components/ui/copy-01";
 import { CircleCheckIcon } from "@/components/ui/circle-check";
 import { RefreshIcon } from "@/components/ui/refresh";
-import { MagicWand01Icon } from "@/components/ui/magic-wand-01";
-import { UndoIcon } from "@/components/ui/undo";
-import { Check } from "lucide-react";
 import { FileText } from "lucide-react";
 import { ResumePreview } from "@/components/resume-preview";
 import { ResumeEditor } from "@/components/resume-editor";
@@ -40,42 +37,6 @@ export function LaTeXPreview({
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
-  const [originalResume, setOriginalResume] = useState<Resume>(initialResumeData);
-  const [isHumanizing, setIsHumanizing] = useState(false);
-  const [isHumanized, setIsHumanized] = useState(false);
-  const [humanizeSuccess, setHumanizeSuccess] = useState(false);
-
-  const handleHumanizeResume = async () => {
-    setIsHumanizing(true);
-    try {
-      const res = await fetch("/api/humanize-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume: resumeData }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || `Failed to humanize resume (${res.status})`);
-      }
-      if (data?.resume) {
-        setOriginalResume(resumeData);
-        handleResumeUpdate(data.resume);
-        setIsHumanized(true);
-        setHumanizeSuccess(true);
-        setTimeout(() => setHumanizeSuccess(false), 6000);
-      }
-    } catch (err) {
-      console.error("Resume humanize error:", err);
-      alert(err instanceof Error ? err.message : "Failed to humanize resume.");
-    } finally {
-      setIsHumanizing(false);
-    }
-  };
-
-  const handleUndoHumanize = () => {
-    handleResumeUpdate(originalResume);
-    setIsHumanized(false);
-  };
 
   // Sync if parent updates
   const resumeData = currentResume;
@@ -157,37 +118,6 @@ export function LaTeXPreview({
           <CardTitle className="text-lg">Generated Resume</CardTitle>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {isHumanized && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleUndoHumanize}
-                className="rounded-xl h-8 text-xs font-medium text-muted-foreground hover:text-foreground"
-                title="Revert bullet points back to original"
-              >
-                <UndoIcon size={13} className="mr-1.5 shrink-0" />
-                Undo Humanize
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleHumanizeResume}
-              disabled={isHumanizing}
-              className={`rounded-xl h-8 text-xs font-semibold transition-all ${
-                isHumanized
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60"
-              }`}
-              title="Audit and rewrite all bullet points using the 25 Anti-AI writing rules"
-            >
-              {isHumanizing ? (
-                <RefreshIcon size={13} className="mr-1.5 shrink-0 animate-spin text-amber-400" />
-              ) : (
-                <MagicWand01Icon size={13} className="mr-1.5 shrink-0 text-amber-400" />
-              )}
-              {isHumanizing ? "Humanizing Resume..." : isHumanized ? "Humanized ✓" : "Humanize Resume"}
-            </Button>
           <Button
             variant="outline"
             size="sm"
@@ -231,12 +161,6 @@ export function LaTeXPreview({
         </div>
       </CardHeader>
       <CardContent>
-        {humanizeSuccess && (
-          <div className="mb-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 text-xs text-emerald-400 flex items-center gap-2">
-            <Check size={14} className="shrink-0 text-emerald-400" />
-            <span><strong>Resume Humanized:</strong> Audited and removed AI writing patterns across all experience & project bullet points while preserving all verifiable metrics.</span>
-          </div>
-        )}
         <Tabs defaultValue="preview">
           <TabsList className="w-full">
             <TabsTrigger value="preview" className="flex-1">
