@@ -298,6 +298,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE — remove a specific provider's configuration
 export async function DELETE(request: NextRequest) {
+  try {
   const session = await getSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -346,4 +347,8 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true });
+  } catch (error) {
+    safeLog.error("Error in DELETE /api/settings/ai-provider:", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to delete settings" }, { status: 500 });
+  }
 }

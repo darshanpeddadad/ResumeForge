@@ -29,6 +29,13 @@
       "when": 1789051514632,
       "tag": "0003_leaderboard",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789637071728,
+      "tag": "0004_add_is_active_to_ai_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -103,7 +103,8 @@ export function AiProviderForm() {
   async function fetchSettings() {
     try {
       const res = await fetch("/api/settings/ai-provider");
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data) return;
 
       const pConfigs = data.providers || { openai: null, google: null, anthropic: null, perplexity: null };
       setConfigs(pConfigs);
@@ -144,7 +145,7 @@ export function AiProviderForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: p }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (res.ok && data.models && Array.isArray(data.models) && data.models.length > 0) {
         setAvailableModels((prev) => ({ ...prev, [p]: data.models }));
         setScanStatus((prev) => ({
@@ -183,9 +184,9 @@ export function AiProviderForm() {
         body: JSON.stringify({ provider: p, apiKey: key.trim() || undefined }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data.error || "Failed to fetch models from provider");
+        throw new Error(data?.error || `Failed to fetch models (status ${res.status})`);
       }
 
       if (data.models && Array.isArray(data.models) && data.models.length > 0) {
@@ -222,8 +223,8 @@ export function AiProviderForm() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to switch active provider");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `Server responded with error status ${res.status}`);
       }
 
       setActiveProvider(provider);
@@ -281,8 +282,8 @@ export function AiProviderForm() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to save settings");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `Server responded with error status ${res.status}`);
       }
 
       if (p === "google") setGoogleKey("");
