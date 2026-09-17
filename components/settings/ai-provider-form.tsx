@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RefreshIcon } from "@/components/ui/refresh";
 import { Delete02Icon } from "@/components/ui/delete-02";
-import { Check, Sparkles, CheckCircle2, Bot, Cpu, Zap, RefreshCw, Layers } from "lucide-react";
+import { Check, Sparkles, CheckCircle2, Bot, Cpu, Zap, RefreshCw, Layers, Eye, EyeOff } from "lucide-react";
 import { SiPerplexity } from "react-icons/si";
 import {
   Card,
@@ -46,6 +46,12 @@ export function AiProviderForm() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<Provider>("google");
   const [activeProvider, setActiveProvider] = useState<Provider | null>(null);
+  const [showKeys, setShowKeys] = useState<Record<Provider, boolean>>({
+    google: false,
+    openai: false,
+    anthropic: false,
+    perplexity: false,
+  });
 
   const [configs, setConfigs] = useState<{
     openai: ProviderConfig | null;

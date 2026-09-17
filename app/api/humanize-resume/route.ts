@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { aiSettings } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { humanizeResume } from "@/lib/humanizer";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import type { Resume } from "@/lib/schemas/resume";
+import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { safeLog } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +17,12 @@ export async function POST(request: NextRequest) {
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limiting protection
+    const rateLimit = checkAiGenerationRateLimit(session.user.id);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.resetMs);
     }
 
     const settings = await getActiveAiSettings(session.user.id);
@@ -54,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ resume: humanized });
   } catch (error) {
-    console.error("Error humanizing resume:", error);
+    safeLog.error("Error humanizing resume:", error);
     const described = describeLlmError(error);
     return NextResponse.json(
       {

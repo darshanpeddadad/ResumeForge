@@ -3,9 +3,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { encrypt, decrypt, maskApiKey } from "@/lib/encryption";
+import { encrypt, decrypt, maskApiKey, sanitizeApiKey } from "@/lib/encryption";
 import { randomUUID } from "crypto";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+import { checkSettingsRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { safeLog } from "@/lib/security";
 
 async function getSession(request: NextRequest) {
   return auth.api.getSession({
@@ -63,6 +65,12 @@ export async function POST(request: NextRequest) {
   const session = await getSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limiting protection
+  const rateLimit = checkSettingsRateLimit(session.user.id);
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit.resetMs, "Too many settings updates. Please wait a moment.");
   }
 
   const body = await request.json();
@@ -152,7 +160,8 @@ export async function POST(request: NextRequest) {
 
   let resolvedApiKey: string | undefined;
   if (apiKey && typeof apiKey === "string" && apiKey.trim()) {
-    resolvedApiKey = apiKey.replace(/[^\x20-\x7E]/g, "").trim();
+    // Sanitize API key: remove invisible characters and control codes
+    resolvedApiKey = sanitizeApiKey(apiKey);
 
     if (resolvedApiKey.length > 250) {
       return NextResponse.json(
@@ -292,6 +301,12 @@ export async function DELETE(request: NextRequest) {
   const session = await getSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limiting protection
+  const rateLimit = checkSettingsRateLimit(session.user.id);
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit.resetMs, "Too many settings requests. Please wait a moment.");
   }
 
   const { searchParams } = new URL(request.url);

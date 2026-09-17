@@ -3,8 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { decrypt } from "@/lib/encryption";
+import { decrypt, sanitizeApiKey } from "@/lib/encryption";
 import { DEFAULT_MODEL, PROVIDER_MODELS, type Provider, type ModelOption } from "@/lib/ai-models";
+import { checkSettingsRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { safeLog } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +18,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Rate limiting
+    const rateLimit = checkSettingsRateLimit(session.user.id);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.resetMs, "Too many model scan requests. Please wait a moment.");
+    }
+
     const body = await request.json();
     const { provider, apiKey } = body as { provider?: Provider; apiKey?: string };
 
@@ -24,8 +32,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve API key: either provided in body or saved in DB
-    let resolvedKey = apiKey?.trim();
-    if (!resolvedKey) {
+    let resolvedKey: string | undefined;
+    if (apiKey) {
+      resolvedKey = sanitizeApiKey(apiKey);
+    } else {
       const existing = await db.query.aiSettings.findFirst({
         where: and(
           eq(aiSettings.userId, session.user.id),
@@ -44,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cleanKey = resolvedKey.replace(/[^\x20-\x7E]/g, "").trim();
+    const cleanKey = sanitizeApiKey(resolvedKey);
 
     // Check for TabPFN prefix on Perplexity
     if (provider === "perplexity" && cleanKey.startsWith("tabpfn_")) {
@@ -62,9 +72,13 @@ export async function POST(request: NextRequest) {
     let dynamicModels: ModelOption[] = [];
 
     if (provider === "google") {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`
-      );
+      // Secure transmission via x-goog-api-key header instead of query parameters
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+        headers: {
+          "x-goog-api-key": cleanKey,
+        },
+      });
+
       if (!res.ok) {
         const errorText = await res.text();
         if (res.status === 400 || res.status === 403) {
@@ -230,7 +244,7 @@ export async function POST(request: NextRequest) {
       defaultModel: DEFAULT_MODEL[provider],
     });
   } catch (err) {
-    console.error("Fetch models error:", err);
+    safeLog.error("Fetch models error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch models from provider" },
       { status: 500 }

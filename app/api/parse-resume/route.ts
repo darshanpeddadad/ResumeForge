@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { aiSettings } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { parseResumeWithLLM } from "@/lib/llm";
 import { buildHighlights } from "@/lib/highlights";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
+import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { safeLog } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,13 +20,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Rate limiting protection for AI generation
+    const rateLimit = checkAiGenerationRateLimit(session.user.id);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.resetMs);
+    }
+
     // Look up user's active BYOK provider settings
     const settings = await getActiveAiSettings(session.user.id);
 
     if (!settings) {
-      console.error(
-        `parse-resume 403: no ai_settings row for user ${session.user.id} ` +
-          `(email: ${session.user.email ?? "?"})`
+      safeLog.error(
+        `parse-resume 403: no ai_settings row for user ${session.user.id} (email: ${session.user.email ?? "?"})`
       );
       return NextResponse.json(
         {
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest) {
         let lastError = primaryErr;
 
         for (const fbModel of fallbacks) {
-          console.warn(
+          safeLog.warn(
             `Primary model ${modelId} failed (${(primaryErr as Error).message}), attempting fallback to ${fbModel}...`
           );
           try {
@@ -115,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ resume, aiChanges, highlights });
   } catch (error) {
-    console.error("Parse resume error:", error);
+    safeLog.error("Parse resume error:", error);
     const info = describeLlmError(error);
     return NextResponse.json(
       {

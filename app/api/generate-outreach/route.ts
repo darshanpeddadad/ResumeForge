@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { aiSettings } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { generateOutreach } from "@/lib/outreach-generator";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import type { Resume } from "@/lib/schemas/resume";
+import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { safeLog } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +18,12 @@ export async function POST(request: NextRequest) {
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limiting protection
+    const rateLimit = checkAiGenerationRateLimit(session.user.id);
+    if (!rateLimit.success) {
+      return rateLimitResponse(rateLimit.resetMs);
     }
 
     // Look up user's AI provider settings
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ outreach });
   } catch (error) {
-    console.error("Generate outreach error:", error);
+    safeLog.error("Generate outreach error:", error);
     const info = describeLlmError(error);
     return NextResponse.json(
       {
