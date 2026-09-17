@@ -14,20 +14,37 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExistingUser, setIsExistingUser] = useState(false);
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setIsExistingUser(false);
+
     try {
       const res = await authClient.signUp.email({
-        email,
+        email: email.trim().toLowerCase(),
         password,
         name: name.trim() || email.split("@")[0],
         callbackURL: "/generate",
       });
+
       if (res.error) {
-        setError(res.error.message || "Failed to create account");
+        const rawMsg = res.error.message || "";
+        const rawCode = (res.error as { code?: string }).code || "";
+        const isAlreadyExists =
+          rawCode.includes("USER_ALREADY_EXISTS") ||
+          rawMsg.toLowerCase().includes("user already exists") ||
+          rawMsg.toLowerCase().includes("already exists") ||
+          res.error.status === 422;
+
+        if (isAlreadyExists) {
+          setIsExistingUser(true);
+          setError("An account with this email already exists. Please sign in instead.");
+        } else {
+          setError(rawMsg || res.error.statusText || "Failed to create account. Please check your credentials.");
+        }
       } else {
         window.location.href = "/generate";
       }
@@ -64,6 +81,7 @@ export default function SignUpPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              autoComplete="name"
               className="rounded-xl border-border/50 bg-background/60 shadow-inner focus-visible:ring-primary"
             />
           </div>
@@ -76,6 +94,7 @@ export default function SignUpPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
               className="rounded-xl border-border/50 bg-background/60 shadow-inner focus-visible:ring-primary"
             />
           </div>
@@ -84,16 +103,28 @@ export default function SignUpPage() {
             <Input
               id="password"
               type="password"
-              placeholder="••••••••"
+              placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={8}
+              autoComplete="new-password"
               className="rounded-xl border-border/50 bg-background/60 shadow-inner focus-visible:ring-primary"
             />
           </div>
 
           {error && (
-            <p className="text-xs text-destructive text-center font-medium bg-destructive/10 p-2 rounded-lg border border-destructive/20">{error}</p>
+            <div className="text-xs text-destructive text-center font-medium bg-destructive/10 p-3 rounded-xl border border-destructive/20 space-y-1.5">
+              <p>{error}</p>
+              {isExistingUser && (
+                <Link
+                  href="/sign-in"
+                  className="inline-block font-semibold text-primary underline underline-offset-2 hover:opacity-80"
+                >
+                  Click here to Sign In →
+                </Link>
+              )}
+            </div>
           )}
 
           <Button type="submit" className="glossy-btn-primary w-full font-semibold text-primary-foreground" disabled={loading}>

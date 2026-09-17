@@ -21,19 +21,35 @@ export function AuthStep() {
     try {
       if (isSignUp) {
         const res = await authClient.signUp.email({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           name: name.trim() || email.split("@")[0],
           callbackURL: "/generate",
         });
         if (res.error) {
-          setError(res.error.message || "Failed to sign up");
+          const rawMsg = res.error.message || "";
+          const rawCode = (res.error as { code?: string }).code || "";
+          const isAlreadyExists =
+            rawCode.includes("USER_ALREADY_EXISTS") ||
+            rawMsg.toLowerCase().includes("user already exists") ||
+            rawMsg.toLowerCase().includes("already exists") ||
+            res.error.status === 422;
+
+          if (isAlreadyExists) {
+            setError("An account with this email already exists. Switching to Sign In...");
+            setTimeout(() => {
+              setIsSignUp(false);
+              setError("Please enter your password to sign in.");
+            }, 1200);
+          } else {
+            setError(rawMsg || res.error.statusText || "Failed to sign up");
+          }
         } else {
           window.location.href = "/generate";
         }
       } else {
         const res = await authClient.signIn.email({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           callbackURL: "/generate",
         });
@@ -66,6 +82,7 @@ export function AuthStep() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required={isSignUp}
+              autoComplete="name"
             />
           </div>
         )}
@@ -78,6 +95,7 @@ export function AuthStep() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
           />
         </div>
         <div className="space-y-1">
@@ -85,15 +103,17 @@ export function AuthStep() {
           <Input
             id="auth-password"
             type="password"
-            placeholder="••••••••"
+            placeholder="At least 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            minLength={8}
+            autoComplete={isSignUp ? "new-password" : "current-password"}
           />
         </div>
 
         {error && (
-          <p className="text-xs text-destructive text-center">{error}</p>
+          <p className="text-xs text-destructive text-center bg-destructive/10 p-2.5 rounded-lg border border-destructive/20">{error}</p>
         )}
 
         <Button type="submit" className="w-full" disabled={loading}>
@@ -114,4 +134,3 @@ export function AuthStep() {
     </div>
   );
 }
-
