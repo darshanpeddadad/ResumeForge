@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect } from "react";
 import Link from "next/link";
@@ -24,7 +24,7 @@ export default function Page() {
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-background">
-      {/* â”€â”€â”€ Ambient Glow Background Orbs â”€â”€â”€ */}
+      {/* ─── Ambient Glow Background Orbs ─── */}
       <div className="ambient-orb top-[-100px] left-1/2 -translate-x-1/2 size-[650px] bg-primary/25 pointer-events-none" />
       <div className="ambient-orb top-[400px] -left-[150px] size-[500px] bg-purple-500/15 pointer-events-none" />
       <div className="ambient-orb top-[600px] -right-[150px] size-[550px] bg-blue-500/15 pointer-events-none" />
@@ -36,15 +36,15 @@ export default function Page() {
         <div className="glass-pill inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full text-xs font-semibold text-foreground/90 mb-8 tracking-wide transition-all hover:border-primary/40">
           <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>Anti-AI Humanizer Engine</span>
-          <span className="text-muted-foreground">â€¢</span>
+          <span className="text-muted-foreground">•</span>
           <span className="text-muted-foreground">Word (.docx) & PDF</span>
-          <span className="text-muted-foreground">â€¢</span>
+          <span className="text-muted-foreground">•</span>
           <span className="text-primary font-bold">ATS-Optimized</span>
         </div>
 
         {/* Proportional Headline */}
         <h1 className="max-w-3xl text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight bg-gradient-to-b from-foreground via-foreground to-foreground/80 bg-clip-text">
-          Letâ€™s be honest: our resume is currently a dumpster fire.
+          Let’s be honest: our resume is currently a dumpster fire.
         </h1>
         <p className="mt-3 max-w-2xl text-xl sm:text-2xl font-semibold text-muted-foreground leading-snug">
           Allow me to save us both from professional embarrassment and actually fix it :)
@@ -52,14 +52,14 @@ export default function Page() {
 
         {/* Emojis in a glass container */}
         <div className="my-5 inline-flex items-center gap-3 px-4 py-1.5 rounded-full glass-card text-2xl select-none shadow-xs">
-          <span>ðŸ’©</span>
-          <span>ðŸ’©</span>
-          <span>ðŸ’©</span>
+          <span>💩</span>
+          <span>💩</span>
+          <span>💩</span>
         </div>
 
         {/* Subtitle */}
         <p className="max-w-xl text-sm sm:text-base text-muted-foreground leading-relaxed">
-          Let&apos;s fix that. AI-tailored resumes, cover letters, and cold outreach drafts all in one place, because writing them yourself is a form of self-harm. ðŸ’€
+          Let&apos;s fix that. AI-tailored resumes, cover letters, and cold outreach drafts—all in one place, because writing them yourself is a form of self-harm. 💀
         </p>
 
         {/* Glossy CTA Actions */}
@@ -77,22 +77,22 @@ export default function Page() {
           <Feature
             icon={<File01Icon size={20} className="text-blue-500" />}
             title="Resume Tailoring"
-            desc="AI rewrites your resume to match any job description in secondsâ€”so you can pretend you actually custom-tailored it while you play Valorant."
+            desc="AI rewrites your resume to match any job description in seconds—so you can pretend you actually custom-tailored it while you play Valorant."
           />
           <Feature
             icon={<MagicWand01Icon size={20} className="text-amber-500" />}
             title="Cover Letter"
-            desc="Zero fluff, metric-driven cover letters strictly aligned with the target roleâ€”because nobody has ever gotten hired by talking about their passion for fast-paced environments."
+            desc="Zero fluff, metric-driven cover letters strictly aligned with the target role—because nobody has ever gotten hired by talking about their passion for fast-paced environments."
           />
           <Feature
             icon={<Mail01Icon size={20} className="text-purple-500" />}
             title="Cold Message"
-            desc="Auto-generated emails and LinkedIn DMs that actually get repliesâ€”saving you from the crushing despair of reading 'Thanks, but we're moving forward with other candidates'."
+            desc="Auto-generated emails and LinkedIn DMs that actually get replies—saving you from the crushing despair of reading 'Thanks, but we're moving forward with other candidates'."
           />
         </div>
 
         <p className="mt-14 text-xs text-muted-foreground">
-          Bring your own API key. Your data stays yoursâ€”because we&apos;re paranoid, too. ðŸ”’
+          Bring your own API key. Your data stays yours—because we&apos;re paranoid, too. 🔒
         </p>
       </main>
 
@@ -120,4 +120,3 @@ function Feature({
     </div>
   );
 }
-
