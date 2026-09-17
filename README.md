@@ -2,42 +2,42 @@
 
 > Precision ATS Resume & Cover Letter Suite — built on top of [Subhraneel Goswami](https://github.com/subhraneel2005)'s open-source project foundation.
 
-**ResumeForge** turns your existing resume (PDF or Word document) into an ATS-optimized, role-tailored resume in seconds. Features Humanizer anti-AI writing intelligence, live in-place LaTeX editing, Word (.docx) & PDF multi-format export, and targeted cover letters. Runs **100% on your own API keys** (BYOK) — bring your own key, delete your data anytime, zero subscription walls.
+**ResumeForge** turns your existing resume (PDF or Word document) into an ATS-optimized, role-tailored resume in seconds. Features Humanizer anti-AI writing intelligence, live in-place LaTeX editing, Word (.docx) & PDF multi-format export, and targeted cover letters & cold outreach. Runs **100% on your own API keys** (BYOK) — bring your own key, delete your data anytime, zero subscription walls.
 
 ---
 
 ## ✨ Features
 
 ### 🎯 Tailored Resume in One Click
-- Upload your existing resume (PDF) and paste the **job description** you're chasing.
-- The AI rewrites and tailors your resume to that exact role, then hands you a clean, professional resume as a **downloadable PDF** (rendered entirely in your browser) or **LaTeX** (`.tex`).
-- Contact links (LinkedIn, GitHub) are pulled straight from your PDF, so they always point to the real URLs.
-- **Every AI change is highlighted** — added bullets, rewritten bullets, and new skills are color-coded so you can audit exactly what the AI did before you download.
+- Upload your existing resume (PDF or Word `.docx`) and paste the **job description** you're chasing.
+- The AI rewrites and tailors your resume to that exact role, optimizing keywords for Applicant Tracking Systems (ATS) while preserving your authentic experience.
+- Contact links (LinkedIn, GitHub, portfolio) are pulled straight from your document, so they always point to the real URLs.
+- **Every AI change is highlighted** — added bullets, rewritten bullets, and new skills are color-coded so you can audit exactly what the AI changed before exporting.
+
+### 📝 Live Editor & Multi-Format Export
+- **Downloadable PDF**: Rendered and compiled entirely in your browser using `@react-pdf/renderer` — no server-side LaTeX toolchain needed.
+- **Word Document (.docx)**: Export clean, professionally formatted Microsoft Word files.
+- **LaTeX Source (`.tex`)**: Export standard Jake's Resume LaTeX code with an integrated live in-browser editor and instant preview.
+
+### 🤖 Humanizer Anti-AI Writing Engine
+- Replaces sterile AI fluff and buzzwords with punchy, metric-driven action verbs.
+- Ensures resume bullets sound authentic, natural, and pass AI-content detection checks.
+
+### ✉️ Cover Letter Generator
+- Instantly crafts a targeted, professional cover letter tailored to the specific job description and company.
+- Matches the tone and accomplishments of your optimized resume.
 
 ### 📧 Cold Outreach That Doesn't Suck
 - Provide a job description and get a polished **cold email** and a snappy **cold DM** — written with your tailored resume in hand.
-- Copy-paste ready. Fire and forget.
-
-### 🗣️ AI Mock Interviewer (Voice)
-A Minecraft-style mock interview, but for your career. Create your interview "world," pick your settings, and the AI interviewer talks to you out loud:
-
-- **World settings** — difficulty (Peaceful → Hard 🌱🔥), duration (5–30 min), and a **seed** that deterministically generates your interviewer's questions (🎲 to randomize).
-- **Live preview** — watch your interviewer's persona, focus areas, and tone update as you type the job description.
-- **Hold-to-talk voice loop** — the interviewer greets you out loud, you answer by holding the mic, it listens (STT), follows up (LLM), and speaks back (TTS). Context is kept locally so refreshes don't lose your place.
-- **Free or premium voice** — use your own **OpenAI** key for best-quality speech, or the **free in-browser voice** (Whisper + Kokoro) that runs locally, no API cost.
-- **Scored feedback** — when the timer runs out, you get an honest **score out of 10**, a strengths / weaknesses / next-steps review, and a full transcript saved to your account.
-
-### 🏆 Public Leaderboard
-- Every completed mock interview posts to the **Hall of Fame** — ranked by average score, then interview count.
-- Top 3 get badges. Sign in and find yourself in the ranks.
+- Copy-paste ready for recruiters and hiring managers. Fire and forget.
 
 ### 🔐 Bring Your Own Key (BYOK)
-- Add either an **OpenAI** or **Google AI** API key under **AI Settings** — it powers the resume tailor, outreach, and the interviewer's brain.
-- Your key is encrypted server-side. No server-side secrets, no middleman API charges — every AI call is billed to *you*, or free in-browser for the interviewer's voice.
+- Add either an **OpenAI** or **Google AI** API key under **AI Settings** — it powers the resume tailor, cover letter, and outreach generator.
+- Your key is encrypted server-side with AES-256. No server-side secrets, no middleman markup — every AI call is billed directly to *your* provider account.
 
 ### 🔒 Your Data, Your Call
 - **Google or GitHub** sign-in via Better Auth.
-- Interview transcripts and feedback are stored on your account; your resume/outreach stays in your hands.
+- No subscription walls or lock-in. Your resumes and generated outreach stay private and in your hands.
 
 ---
 
@@ -46,7 +46,8 @@ A Minecraft-style mock interview, but for your career. Create your interview "wo
 1. **Sign in** with Google or GitHub.
 2. Go to **AI Settings**, paste your **OpenAI** or **Google AI** API key.
 3. Upload your resume → paste the job description → hit **Generate**.
-4. Download your tailored **PDF** (or `.tex`), use the outreach copy, and rehearse with the **Mock Interviewer** — then climb the leaderboard.
+4. Audit the highlighted changes, customize bullets in the live editor, and download your **PDF**, **Word (.docx)**, or **LaTeX** file.
+5. Grab your matching **Cover Letter** and **Cold Outreach** messages and apply with confidence.
 
 ---
 
@@ -60,33 +61,20 @@ Architecture & stack powering the product.
 - **Auth:** Better Auth (Google + GitHub OAuth, cookies)
 - **Database:** Drizzle ORM on Neon/Postgres (`lib/db/schema.ts`)
 - **AI:** Vercel AI SDK (`ai` v7) with `@ai-sdk/openai` and `@ai-sdk/google`
-- **PDF:** `@react-pdf/renderer` (`components/pdf-resume.tsx`) — compiled in the browser, no server-side LaTeX toolchain
+- **PDF Engine:** `@react-pdf/renderer` (`components/pdf-resume.tsx`) — compiled client-side in the browser
+- **Document Processing:** `pdfjs-dist`, `mammoth` (DOCX parsing), and `docx` (Word export)
 
-### Key modules
+### Key Modules
 | Area | Where |
 | --- | --- |
-| Resume parsing + LaTeX | `lib/pdf-parser.ts`, `lib/latex-renderer.ts`, `lib/template-renderer.ts` |
-| PDF download (client-side) | `components/pdf-resume.tsx`, `components/latex-preview.tsx` |
-| Outreach generation | `api/generate-outreach`, `lib/outreach-generator.ts` |
-| AI provider settings | `api/settings/ai-provider`, `components/settings/ai-provider-form.tsx` |
-| Interview config (seeded, deterministic) | `lib/interview-config.ts`, `lib/interview-models.ts` |
-| Interview APIs (chat/STT/TTS/session) | `api/interview/*` |
-| Feedback scoring | `api/interview/session/[id]/complete` (score 1–10 via structured output) |
-| Leaderboard | `api/leaderboard`, `app/leaderboard/page.tsx` |
-| Browser voice engine (Whisper + Kokoro) | `lib/interview-browser-voice.ts`, `lib/audio.ts` |
-
-### How the mock interviewer works
-- **Turn-based, no WebSocket:** each exchange is `record → transcribe (STT) → LLM (chat) → speak (TTS)`.
-- Configured via a **seeded PRNG** (`hashString` + murmur-style mulberry32) so the same seed + job description + difficulty always produces the same interviewer config — like a Minecraft world seed.
-- **Voice engines:** OpenAI (`gpt-4o-mini-transcribe` / `gpt-4o-mini-tts`) or free in-browser (transformers.js Whisper-tiny + `kokoro-js`). Google STT isn't exposed by `@ai-sdk/google`, so Google voice is excluded — Google users get the free browser voice.
-- **BYOK enforcement:** every server route decrypts the user's API key at call time and 403s to `/settings` when missing. No server-side keys.
-- **Persistence:** the live conversation lives in `localStorage`; on completion the transcript (markdown) + LLM feedback JSON (with a **score 1–10**) are saved to the `interview_sessions` table, and `user.mock_interviews_completed` increments for the leaderboard.
-
-### Notable gotchas solved along the way
-- Current `ai` SDK's OpenAI `transcribe` expects a **plain base64 string**, not a `data:...;base64,` URL — the prefix makes its decoder throw `InvalidCharacterError`.
-- `generateSpeech` returns MP3 (`audio/mpeg`) for OpenAI TTS.
-- Browser autoplay policies block programmatic TTS without a gesture → the interviewer auto-greets but offers a one-tap "hear it" fallback and a suspended-`AudioContext` guard.
-- STT/TTS model + voice values are validated against the active voice engine when saved, so stale "kokoro" values can never leak into an OpenAI call.
+| Resume & Document Parsing | `lib/pdf-parser.ts`, `lib/document-parser.ts` |
+| LaTeX Generation & Templates | `lib/latex-renderer.ts`, `lib/template-renderer.ts`, `templates/jake-resume.tex` |
+| Live Preview & PDF Download | `components/pdf-resume.tsx`, `components/latex-preview.tsx`, `components/resume-preview.tsx` |
+| Word (.docx) Export | `lib/docx-renderer.ts` |
+| Humanizer Engine | `lib/humanizer.ts`, `app/api/humanize/route.ts` |
+| Cover Letter & Outreach | `lib/cover-letter-generator.ts`, `lib/outreach-generator.ts`, `app/cover-letter/` |
+| Visual Change Auditing | `lib/highlights.ts` |
+| AI Settings & BYOK Encryption | `lib/encryption.ts`, `app/api/settings/ai-provider/route.ts`, `components/settings/ai-provider-form.tsx` |
 
 ### Environment
 ```env
@@ -96,4 +84,5 @@ GOOGLE_CLIENT_SECRET=...
 GITHUB_CLIENT_ID=...        # GitHub OAuth callback: /api/auth/callback/github
 GITHUB_CLIENT_SECRET=...
 BETTER_AUTH_SECRET=...      # also used as the encryption key for users' API keys
+BETTER_AUTH_URL=http://localhost:3000
 ```
