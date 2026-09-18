@@ -91,30 +91,38 @@ function keepIfAbsentInText(
 }
 
 export function buildHighlights(
-  aiChanges: AiChanges,
+  aiChanges: AiChanges | undefined,
   resume: Resume,
   resumeText: string,
   jobDescription?: string
 ): Highlights {
   const jdPhrases = tokenizeJd(jobDescription || "");
   const excludedJdTerms = new Set(jdPhrases.map((p) => normalizeTerm(p)));
+  const lowerResumeText = (resumeText || "").toLowerCase();
 
-  // Build lookup: sectionTitle → added bullet texts
+  // Build lookup: sectionTitle → added bullet texts (if provided by LLM)
   const addedByTitle: Record<string, string[]> = {};
   const tailoredByTitle: Record<string, string[]> = {};
 
-  for (const bucket of aiChanges.addedBullets) {
-    addedByTitle[bucket.sectionTitle] = [
-      ...(addedByTitle[bucket.sectionTitle] ?? []),
-      ...bucket.bullets,
-    ];
+  if (aiChanges?.addedBullets) {
+    for (const bucket of aiChanges.addedBullets) {
+      addedByTitle[bucket.sectionTitle] = [
+        ...(addedByTitle[bucket.sectionTitle] ?? []),
+        ...bucket.bullets,
+      ];
+    }
   }
-  for (const bucket of aiChanges.tailoredBullets) {
-    tailoredByTitle[bucket.sectionTitle] = [
-      ...(tailoredByTitle[bucket.sectionTitle] ?? []),
-      ...bucket.bullets,
-    ];
+  if (aiChanges?.tailoredBullets) {
+    for (const bucket of aiChanges.tailoredBullets) {
+      tailoredByTitle[bucket.sectionTitle] = [
+        ...(tailoredByTitle[bucket.sectionTitle] ?? []),
+        ...bucket.bullets,
+      ];
+    }
   }
+
+  const hasExplicitAiBullets =
+    Object.keys(addedByTitle).length > 0 || Object.keys(tailoredByTitle).length > 0;
 
   const bySectionTitle: Record<string, EntryHighlights[]> = {};
 
@@ -128,27 +136,52 @@ export function buildHighlights(
       const added: number[] = [];
       const tailored: number[] = [];
       entry.bullets.forEach((bullet, bi) => {
-        if (addedTexts.has(bullet)) added.push(bi);
-        else if (tailoredTexts.has(bullet)) tailored.push(bi);
+        if (hasExplicitAiBullets) {
+          if (addedTexts.has(bullet)) added.push(bi);
+          else if (tailoredTexts.has(bullet)) tailored.push(bi);
+        } else {
+          // Fast deterministic comparison: if bullet is absent from source resume, mark as tailored
+          const cleanSnippet = bullet.replace(/[*_]/g, "").trim().toLowerCase();
+          const firstWords = cleanSnippet.split(" ").slice(0, 5).join(" ");
+          if (firstWords.length > 10 && !lowerResumeText.includes(firstWords)) {
+            tailored.push(bi);
+          }
+        }
       });
       const jd = matchJdKeywordsForSection(entry.bullets, jdPhrases);
       return { added, tailored, jd };
     });
   }
 
+  // Find added skills by checking against resumeText
+  const addedSkillItems: string[] = [];
+  if (aiChanges?.addedSkillItems && aiChanges.addedSkillItems.length > 0) {
+    addedSkillItems.push(
+      ...keepIfAbsentInText(aiChanges.addedSkillItems, resumeText, excludedJdTerms)
+    );
+  } else {
+    for (const section of resume.sections) {
+      if (section.type === "skills") {
+        for (const cat of section.categories || []) {
+          for (const item of cat.items || []) {
+            if (item && !lowerResumeText.includes(item.toLowerCase()) && !excludedJdTerms.has(normalizeTerm(item))) {
+              addedSkillItems.push(item);
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {
     bySectionTitle,
-    addedSkillItems: keepIfAbsentInText(
-      aiChanges.addedSkillItems,
-      resumeText,
-      excludedJdTerms
-    ),
+    addedSkillItems,
     addedListItems: keepIfAbsentInText(
-      aiChanges.addedListItems,
+      aiChanges?.addedListItems ?? [],
       resumeText,
       excludedJdTerms
     ),
-    addedSections: aiChanges.addedSections ?? [],
+    addedSections: aiChanges?.addedSections ?? [],
   };
 }
 

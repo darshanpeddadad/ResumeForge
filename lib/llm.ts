@@ -165,7 +165,7 @@ export async function parseResumeWithLLM(
         prompt: userMessage,
         output: Output.object({ schema: parseResultLlmSchema }),
         temperature: 0.25, // Low temperature locks in determinism and eliminates fluctuation
-        maxRetries: 2,
+        maxRetries: 0,     // Fail over to fallback model immediately without multi-second retry delays
       });
       return output;
     }

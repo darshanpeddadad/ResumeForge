@@ -108,13 +108,7 @@ export const aiChangesSchema = z.object({
 
 export const parseResultLlmSchema = z.object({
   resume: resumeLlmSchema,
-  aiChanges: aiChangesSchema.optional().default({
-    addedBullets: [],
-    tailoredBullets: [],
-    addedSkillItems: [],
-    addedListItems: [],
-    addedSections: [],
-  }),
+  aiChanges: aiChangesSchema.optional(),
 });
 
 export type AiChanges = z.infer<typeof aiChangesSchema>;

@@ -79,7 +79,7 @@ export const PROVIDER_MODELS: Record<Provider, ModelOption[]> = {
 
 export const DEFAULT_MODEL: Record<Provider, string> = {
   openai: "gpt-4o-mini",
-  google: "gemini-3.6-flash",
+  google: "gemini-3.5-flash",
   anthropic: "claude-3-5-sonnet-latest",
   perplexity: "sonar-pro",
 };
