@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminSession } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { user, session, aiSettings } from "@/lib/db/schema";
-import { eq, ilike, or, desc } from "drizzle-orm";
+import { user, session, aiSettings, generationLog } from "@/lib/db/schema";
+import { eq, ilike, or, desc, gt, count } from "drizzle-orm";
 import { safeLog } from "@/lib/security";
+
+function parseUserAgent(ua?: string | null) {
+  if (!ua) return { os: "Unknown", browser: "Unknown" };
+  const lower = ua.toLowerCase();
+
+  let os = "Other";
+  if (lower.includes("windows") || lower.includes("win32") || lower.includes("win64")) os = "Windows";
+  else if (lower.includes("mac") || lower.includes("darwin")) os = "macOS";
+  else if (lower.includes("android")) os = "Android";
+  else if (lower.includes("iphone") || lower.includes("ipad") || lower.includes("ios")) os = "iOS";
+  else if (lower.includes("linux")) os = "Linux";
+
+  let browser = "Other";
+  if (lower.includes("edg/") || lower.includes("edge")) browser = "Edge";
+  else if (lower.includes("chrome") && !lower.includes("edg")) browser = "Chrome";
+  else if (lower.includes("safari") && !lower.includes("chrome")) browser = "Safari";
+  else if (lower.includes("firefox")) browser = "Firefox";
+
+  return { os, browser };
+}
 
 export async function GET(request: NextRequest) {
   const authCheck = await verifyAdminSession(request);
@@ -24,6 +44,7 @@ export async function GET(request: NextRequest) {
         emailVerified: user.emailVerified,
         image: user.image,
         createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       })
       .from(user);
 
@@ -34,6 +55,8 @@ export async function GET(request: NextRequest) {
     }
 
     const usersList = await usersQuery.orderBy(desc(user.createdAt)).limit(100);
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
 
     // Fetch AI provider settings for these users (without exposing secret keys!)
     const userSettings = await db
@@ -52,11 +75,87 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const enrichedUsers = usersList.map((u) => ({
-      ...u,
-      aiProvider: providerMap.get(u.id)?.provider || null,
-      aiModel: providerMap.get(u.id)?.model || null,
-    }));
+    // Fetch all active sessions
+    const activeSessions = await db
+      .select({
+        id: session.id,
+        userId: session.userId,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        updatedAt: session.updatedAt,
+        expiresAt: session.expiresAt,
+      })
+      .from(session)
+      .where(gt(session.expiresAt, now))
+      .orderBy(desc(session.updatedAt));
+
+    const userSessionMap = new Map<
+      string,
+      {
+        count: number;
+        lastSeen: Date;
+        latestIp: string | null;
+        latestDevice: string;
+        isOnline: boolean;
+      }
+    >();
+
+    for (const s of activeSessions) {
+      const existing = userSessionMap.get(s.userId);
+      const isOnline = new Date(s.updatedAt) > fiveMinutesAgo;
+      const { os, browser } = parseUserAgent(s.userAgent);
+      const deviceStr = `${os} · ${browser}`;
+
+      if (!existing) {
+        userSessionMap.set(s.userId, {
+          count: 1,
+          lastSeen: new Date(s.updatedAt),
+          latestIp: s.ipAddress,
+          latestDevice: deviceStr,
+          isOnline,
+        });
+      } else {
+        existing.count += 1;
+        if (new Date(s.updatedAt) > existing.lastSeen) {
+          existing.lastSeen = new Date(s.updatedAt);
+          existing.latestIp = s.ipAddress;
+          existing.latestDevice = deviceStr;
+        }
+        if (isOnline) existing.isOnline = true;
+      }
+    }
+
+    // Fetch generation counts for each user
+    const genCounts = await db
+      .select({
+        userId: generationLog.userId,
+        count: count(),
+      })
+      .from(generationLog)
+      .groupBy(generationLog.userId);
+
+    const genCountMap = new Map<string, number>();
+    for (const g of genCounts) {
+      if (g.userId) genCountMap.set(g.userId, g.count);
+    }
+
+    const enrichedUsers = usersList.map((u) => {
+      const sessionInfo = userSessionMap.get(u.id);
+      const lastActiveAt = sessionInfo?.lastSeen || u.updatedAt || u.createdAt;
+      const isOnline = sessionInfo ? sessionInfo.isOnline : false;
+
+      return {
+        ...u,
+        aiProvider: providerMap.get(u.id)?.provider || null,
+        aiModel: providerMap.get(u.id)?.model || null,
+        isOnline,
+        lastActiveAt: lastActiveAt.toISOString(),
+        activeSessions: sessionInfo?.count || 0,
+        latestIp: sessionInfo?.latestIp || null,
+        latestDevice: sessionInfo?.latestDevice || "Unknown",
+        totalGenerations: genCountMap.get(u.id) || 0,
+      };
+    });
 
     return NextResponse.json({ users: enrichedUsers });
   } catch (error) {
