@@ -1,58 +1,142 @@
 import { generateText, Output } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { parseResultSchema, type ParseResult } from "@/lib/schemas/resume";
+import {
+  parseResultLlmSchema,
+  hydrateSectionIds,
+  type ParseResultLlm,
+  type Resume,
+} from "@/lib/schemas/resume";
 import type { Provider } from "@/lib/ai-models";
 import { executeWithModelFallback } from "@/lib/ai-runner";
+import { sanitizeAiPatterns } from "@/lib/humanizer";
 
-const SYSTEM_PROMPT = `You are an expert resume parser and ATS optimizer. Extract information from the provided resume text, structure it as JSON, and ENHANCE it to be comprehensive, detailed, and ATS-friendly.
+const SYSTEM_PROMPT = `You are a Principal Software Engineer and elite technical resume strategist.
+Your mission is to transform the candidate's resume into a high-scoring (90+ ATS match), natural, human-written engineering resume.
 
-CRITICAL RULES - DO NOT:
-1. NEVER add companies, jobs, projects, skills, or experiences NOT in the resume text
-2. NEVER add entries from the job description - it is ONLY for keyword tailoring
-3. NEVER invent new bullet points - only expand and detail what exists
-4. CONTACT LINKS: ALWAYS extract the linkedin and github URLs exactly as they appear and put the clean path in the linkedin/github fields. NEVER omit them, NEVER add or duplicate the domain (no "github.com/github.com/x" or "linkedin.com/in/linkedin.com/in/x"), NEVER invent a URL. A field like "github.com/subhraneel2005/nini" must become "subhraneel2005/nini", a URL like "https://www.linkedin.com/in/subhraneel" must become "subhraneel". If a URL is missing from the resume, use empty string "".
-5. CONTACT FIELDS: phone must contain ONLY the phone number (digits, spaces, +, -). address must contain ONLY the location (city/state/country). email must be a bare email. Never leave stray labels, prefixes, or extra words in these fields (e.g. no "INT +91..." in the address, no trailing "B" in the phone).
+═══════════════════════════════════════════════════════
+MANDATORY PRESERVATION OF ORIGINAL RESUME CONTENT
+═══════════════════════════════════════════════════════
+DO NOT DROP OR OMIT THE CANDIDATE'S BACKGROUND. You must extract and preserve:
 
-ENHANCEMENT STRATEGY (HUMAN-CENTERED & ATS-OPTIMIZED):
-1. NATURAL BULLET DENSITY: Produce 3-5 high-impact bullet points for major experience roles, 2-3 for internships/past roles, and 2-4 for projects. Never force a rigid identical bullet count across all entries.
-2. HUMAN CADENCE & LENGTH VARIATION: Avoid cookie-cutter length formulas. Alternate short punchy lines (10-15 words) with detailed technical explanations (20-25 words).
-3. CONCRETE ENGINEERING SUBSTANCE:
-   - What was built/done (specific system, microservice, algorithm, or tool name)
-   - Technologies and tools used (name the exact libraries, databases, cloud services)
-   - Actual scope and measurable impact (latency, throughput, reliability, test coverage)
-4. BLADER/HUMANIZER ANTI-AI RULES (ZERO AI TELLS):
-   - BAN OVERUSED BUZZWORDS: Never use words such as delve, testament, tapestry, landscape, pivotal, beacon, nestled, boasting, showcasing, foster, robust, multifaceted, vibrant, seamless, spearheaded, leveraged, utilized, synergy, dynamic, passionate, transformative, underscores, embodies.
-   - START WITH CONCRETE ACTION VERBS: Built, Engineered, Architected, Developed, Designed, Implemented, Scaled, Automated, Deployed, Reduced, Decreased, Optimized, Refactored, Integrated, Benchmarked, Configured.
-   - NO FORCED TRIADS: Do not artificially group technologies into sets of 3 just for rhythmic symmetry.
-   - NO NOT-X-BUT-Y: State positive claims directly without contrasting against unmade claims.
-   - NO FABRICATED METRICS: Do not invent generic cookie-cutter metrics ("reduced time by 40%") out of nowhere. Quantify what the candidate actually built or handled.
-   - NO CORPORATE HYPERBOLE: State what the system did without dramatic flair.
-5. JD KEYWORD ALIGNMENT: When a job description is provided, weave genuine matching technical skills into relevant bullets naturally.
-6. TECHNICAL SKILLS: Extract and categorize all technologies mentioned anywhere in the resume.
-7. SPARSE BOLDING: Bold at most 1-2 standout technologies or metrics per bullet using double asterisks (** **). Never bold every line by formula.
+1. WORK EXPERIENCE (type: "bullet_list"):
+   - Extract EVERY job, employer, role, and internship from the original resume.
+   - heading: Company name
+   - subheading: Role / Job Title
+   - dateRange: e.g. "May 2024 – Aug 2024" or "2022 – Present"
+   - location: City, State or Country
+   - bullets: 3-5 high-impact, tailored achievement bullets per role.
 
-AI-CHANGE ANNOTATION (the "aiChanges" part of your output):
-After building the resume, report exactly what you created or altered so the UI can highlight it.
-- addedBullets: for each section (experience/projects/leadership) and entry, list the FULL VERBATIM text of every bullet you created that has NO counterpart in the original resume text. Copy the strings exactly as they appear in your resume (including any **bold** markers). Empty list if none.
-- tailoredBullets: for each section and entry, list the FULL VERBATIM text of every bullet that was already in the original resume but you substantially expanded or rewrote (do NOT list bullets you left essentially unchanged). Copy verbatim from your resume, including **bold** markers. Empty list if none.
-- addedSkills: skills labels that were not mentioned anywhere in the original resume text and were not part of the job description (if provided). Give the short label, e.g. "Kubernetes", not a full sentence. Empty list if none.
-- addedCoursework: course names you added that were not in the original resume. Empty list if none.
-- IMPORTANT: never fabricate entries in aiChanges; if nothing was added or rewritten, use empty arrays. Always copy bullet text from your own resume output so the strings match character-for-character.
+2. EDUCATION (type: "bullet_list"):
+   - Extract EVERY degree, university, and educational institution from the resume.
+   - heading: University / School name (e.g. "Technical University of Munich")
+   - subheading: Degree & Major (e.g. "M.Sc. in Computer Science")
+   - dateRange: e.g. "Oct 2024 – Sep 2027"
+   - location: City, Country
+   - bullets: GPA, honors, relevant coursework, or thesis if mentioned.
 
-OUTPUT VOLUME (these are MINIMUMS, produce MORE if the source content supports it):
-- Each experience: 5-6 substantial bullet points
-- Each project: 4-5 substantial bullet points  
-- Technical skills: 3 categories with all mentioned technologies
-- Education: preserve all details
-- Contact: preserve all details, use empty string "" for missing fields`;
+3. PROJECTS (type: "projects"):
+   - Extract EVERY project from the original resume.
+   - heading: Project Name
+   - subheading: Technologies / Tech Stack used (e.g. "Next.js, TypeScript, Docker, Kubernetes")
+   - dateRange: e.g. "Jan 2024" or "Ongoing"
+   - bullets: 2-3 bullets explaining what was engineered, the technical challenge, and the outcome.
+
+4. TECHNICAL SKILLS (type: "skills"):
+   - Consolidate ALL skills into ONE SINGLE "Technical Skills" section.
+   - DO NOT create multiple Technical Skills sections. Put all categories into this one section.
+   - Group into relevant categories:
+     • Languages: e.g. Python, TypeScript, Go, C++, SQL
+     • Cloud & DevOps: e.g. Docker, Kubernetes, AWS, Terraform, CI/CD, Linux
+     • Frameworks & Libraries: e.g. Next.js, React, Node.js, FastAPI
+     • Databases & Storage: e.g. PostgreSQL, Redis, MongoDB
+     • Developer Tools: e.g. Git, Helm, Prometheus, Grafana
+   - When a JD is provided, incorporate matching skills from the JD that align with the candidate's actual background.
+
+5. PROFESSIONAL SUMMARY (type: "text", optional/recommended):
+   - A punchy 2-3 sentence technical overview tailored to the target JD role.
+   - Focus on candidate's core engineering strengths, domain focus, and value.
+   - STRICTLY PROFESSIONAL: DO NOT use informal parentheticals like "(honestly)" or conversational asides.
+
+6. OTHER SECTIONS (if present in original resume):
+   - Certifications (type: "simple_list" or "skills")
+   - Leadership & Extracurriculars (type: "bullet_list")
+   - Publications or Research (type: "projects" or "bullet_list")
+   - Awards or Honors (type: "simple_list")
+
+═══════════════════════════════════════════════════════
+THE 5 ENGINEERING BULLET ARCHETYPES (Rotate through these)
+═══════════════════════════════════════════════════════
+To prevent repetitive AI formula ("Verb + adjective + noun, resulting in metric"), rotate through these 5 archetypes:
+
+• Pattern A (Metric & Impact First):
+  Structure: [Action + Metric Outcome] by [Technical Implementation / Architecture]
+  Example: "Cut cloud infrastructure spend by 28% by auditing unused AWS EBS volumes and migrating non-critical workloads to Spot instances."
+
+• Pattern B (Architectural & Technical Decision):
+  Structure: [Technical decision / migration]; [direct consequence or stability outcome]
+  Example: "Migrated REST polling endpoints to WebSocket channels in Go; slashed server CPU utilization by 45% during peak trading hours."
+
+• Pattern C (Problem-Resolution & Deep Debugging):
+  Structure: [Concrete problem / bottleneck] — [root cause fix], [outcome]
+  Example: "Production database deadlocks were causing sporadic 504 gateway timeouts — identified unindexed foreign keys and restructured transaction isolation levels to eliminate contention."
+
+• Pattern D (Products, Tools & Pipelines Shipped):
+  Structure: [Built / Shipped X using Tech Y] that [solved workflow problem for team or users]
+  Example: "Engineered an automated CI/CD canary deployment pipeline with GitHub Actions and ArgoCD, reducing release cycle time from bi-weekly to multiple daily deploys."
+
+• Pattern E (Operational Scale, Reliability & SRE):
+  Structure: [Operated scale X across infrastructure Y] with [monitoring / reliability practices]
+  Example: "Operated multi-region Kubernetes clusters running 80+ microservices, maintaining 99.95% uptime with Prometheus alerting and automated horizontal pod autoscaling."
+
+═══════════════════════════════════════════════════════
+STRICT ANTI-AI CONSTRAINTS
+═══════════════════════════════════════════════════════
+- BANNED BUZZWORDS (NEVER USE):
+  leveraged, utilized, spearheaded, orchestrated, championed, fostered, synergistic, seamless, robust, dynamic, pivotal, transformative, testament, delve, beacon.
+
+- STRONG ACTION VERBS:
+  built, designed, engineered, scaled, automated, cut, shipped, refactored, debugged, integrated, deployed, migrated, provisioned, benchmarked.
+
+- VARY OPENING VERBS:
+  Never start two adjacent bullets with the same verb.
+
+- VARY LENGTH:
+  Mix short punchy bullets (10-14 words) with detailed technical explanations (22-30 words).
+
+- SPARSE BOLDING:
+  Bold at most 1-2 standout technologies or metrics per bullet using **double asterisks** (e.g. "**Kubernetes**", "**40% latency reduction**").
+
+═══════════════════════════════════════════════════════
+LANGUAGE & MULTILINGUAL HANDLING
+═══════════════════════════════════════════════════════
+- Write the resume in the language of the source resume text (typically English).
+- If the job description is in German, French, or another language:
+  • Extract the core technical qualifications and matching keywords.
+  • Keep the resume output in the candidate's language (English).
+  • Do NOT translate the candidate's job titles, company names, or university degrees into German.
+
+═══════════════════════════════════════════════════════
+OPTIMAL ATS SECTION ORDER (when JD provided)
+═══════════════════════════════════════════════════════
+1. Professional Summary (if included)
+2. Technical Skills
+3. Work Experience
+4. Projects
+5. Education
+6. Certifications / Additional sections
+
+(Without JD: preserve original logical resume flow)
+`;
 
 function sanitizeText(str: string): string {
   return str
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, "-");
+}
+
+export interface ParseResult {
+  resume: Resume;
+  aiChanges: ParseResultLlm["aiChanges"];
 }
 
 export async function parseResumeWithLLM(
@@ -66,10 +150,10 @@ export async function parseResumeWithLLM(
   const cleanJD = jobDescription ? sanitizeText(jobDescription) : undefined;
 
   const userMessage = cleanJD
-    ? `RESUME TEXT:\n\n${cleanResume}\n\n---\nJOB DESCRIPTION (for keyword tailoring ONLY - do NOT add new entries):\n\n${cleanJD}`
-    : `RESUME TEXT:\n\n${cleanResume}`;
+    ? `SOURCE RESUME TEXT (Extract all jobs, degrees, projects, skills from this document):\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nTARGET JOB DESCRIPTION (Tailor keywords, highlight matching skills, optimize ATS order):\n\n${cleanJD}`
+    : `SOURCE RESUME TEXT (Extract all jobs, degrees, projects, skills from this document):\n\n${cleanResume}`;
 
-  return executeWithModelFallback(
+  const llmResult = await executeWithModelFallback(
     provider,
     apiKey || "",
     modelId,
@@ -79,10 +163,37 @@ export async function parseResumeWithLLM(
         model: model as any,
         instructions: SYSTEM_PROMPT,
         prompt: userMessage,
-        output: Output.object({ schema: parseResultSchema }),
-        maxRetries: 1,
+        output: Output.object({ schema: parseResultLlmSchema }),
+        temperature: 0.25, // Low temperature locks in determinism and eliminates fluctuation
+        maxRetries: 2,
       });
       return output;
     }
   );
+
+  // Hydrate nanoids, normalize sections, and consolidate duplicate skills
+  const resume = hydrateSectionIds(llmResult.resume);
+
+  // Apply deterministic pattern sanitizer across all text and bullets
+  for (const section of resume.sections) {
+    if (section.content) {
+      section.content = sanitizeAiPatterns(section.content);
+    }
+    if (section.entries) {
+      for (const entry of section.entries) {
+        entry.bullets = entry.bullets.map(sanitizeAiPatterns);
+      }
+    }
+  }
+
+  return {
+    resume,
+    aiChanges: llmResult.aiChanges || {
+      addedBullets: [],
+      tailoredBullets: [],
+      addedSkillItems: [],
+      addedListItems: [],
+      addedSections: [],
+    },
+  };
 }

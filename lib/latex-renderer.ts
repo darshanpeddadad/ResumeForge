@@ -1,4 +1,4 @@
-import type { Resume } from "@/lib/schemas/resume";
+import type { Resume, ResumeSection, BulletEntry } from "@/lib/schemas/resume";
 import { parseContactUrl } from "@/lib/contact-links";
 
 function escapeLatex(text: string): string {
@@ -60,73 +60,47 @@ function renderContactSection(contact: Resume["contact"]): string {
   return lines.join("\n");
 }
 
-function renderEducationSection(education: Resume["education"]): string {
-  const lines: string[] = [];
-
-  lines.push("%-----------EDUCATION-----------");
-  lines.push("\\section{Education}");
-  lines.push("  \\resumeSubHeadingListStart");
-
-  for (const edu of education) {
-    lines.push("    \\resumeSubheading");
-    lines.push(
-      "      {" + escapeLatex(edu.institution) + "}{" + escapeLatex(edu.dateRange) + "}"
-    );
-    lines.push(
-      "      {" + escapeLatex(edu.degree) + "}{" + (edu.location ? escapeLatex(edu.location) : "") + "}"
-    );
+function renderSection(section: ResumeSection): string {
+  switch (section.type) {
+    case "bullet_list":
+      return renderBulletListSection(section.title, section.entries);
+    case "projects":
+      return renderProjectsSection(section.title, section.entries);
+    case "skills":
+      return renderSkillsSection(section.title, section.categories);
+    case "simple_list":
+      return renderSimpleListSection(section.title, section.items);
+    case "text":
+      return renderTextSection(section.title, section.content);
+    default:
+      return "";
   }
-
-  lines.push("  \\resumeSubHeadingListEnd");
-
-  return lines.join("\n");
 }
 
-function renderCourseworkSection(
-  coursework: string[] | undefined
+function renderBulletListSection(
+  title: string,
+  entries: BulletEntry[]
 ): string {
-  if (!coursework || coursework.length === 0) return "";
+  if (!entries || entries.length === 0) return "";
 
+  const sectionLabel = title.toUpperCase().replace(/ /g, "-");
   const lines: string[] = [];
 
-  lines.push("%------RELEVANT COURSEWORK-------");
-  lines.push("\\section{Relevant Coursework}");
-  lines.push("        \\begin{multicols}{4}");
-  lines.push("            \\begin{itemize}[itemsep=-5pt, parsep=3pt]");
-
-  for (const course of coursework) {
-    lines.push("                \\item\\small " + escapeLatex(course));
-  }
-
-  lines.push("            \\end{itemize}");
-  lines.push("        \\end{multicols}");
-  lines.push("        \\vspace*{2.0\\multicolsep}");
-
-  return lines.join("\n");
-}
-
-function renderExperienceSection(
-  experience: Resume["experience"]
-): string {
-  if (!experience || experience.length === 0) return "";
-
-  const lines: string[] = [];
-
-  lines.push("%-----------EXPERIENCE-----------");
-  lines.push("\\section{Experience}");
+  lines.push(`%-----------${sectionLabel}-----------`);
+  lines.push(`\\section{${escapeLatex(title)}}`);
   lines.push("  \\resumeSubHeadingListStart");
 
-  for (const exp of experience) {
+  for (const entry of entries as Array<{ heading: string; subheading: string; dateRange: string; location?: string; bullets: string[] }>) {
     lines.push("    \\resumeSubheading");
     lines.push(
-      "      {" + escapeLatex(exp.company) + "}{" + escapeLatex(exp.dateRange) + "}"
+      "      {" + escapeLatex(entry.heading) + "}{" + escapeLatex(entry.dateRange) + "}"
     );
     lines.push(
-      "      {" + escapeLatex(exp.position) + "}{" + (exp.location ? escapeLatex(exp.location) : "") + "}"
+      "      {" + escapeLatex(entry.subheading) + "}{" + (entry.location ? escapeLatex(entry.location) : "") + "}"
     );
     lines.push("      \\resumeItemListStart");
 
-    for (const bullet of exp.bulletPoints) {
+    for (const bullet of entry.bullets) {
       lines.push("        \\resumeItem{" + escapeLatex(bullet) + "}");
     }
 
@@ -139,31 +113,34 @@ function renderExperienceSection(
   return lines.join("\n");
 }
 
-function renderProjectsSection(projects: Resume["projects"]): string {
-  if (!projects || projects.length === 0) return "";
+function renderProjectsSection(
+  title: string,
+  entries: BulletEntry[]
+): string {
+  if (!entries || entries.length === 0) return "";
 
   const lines: string[] = [];
 
-  lines.push("%-----------PROJECTS-----------");
-  lines.push("\\section{Projects}");
+  lines.push(`%-----------${title.toUpperCase().replace(/ /g, "-")}-----------`);
+  lines.push(`\\section{${escapeLatex(title)}}`);
   lines.push("    \\vspace{-5pt}");
   lines.push("    \\resumeSubHeadingListStart");
 
-  for (const project of projects) {
-    const techPart = project.technologies
-      ? " $|$ \\emph{" + escapeLatex(project.technologies) + "}"
+  for (const entry of entries as Array<{ heading: string; subheading: string; dateRange: string; bullets: string[] }>) {
+    const techPart = entry.subheading
+      ? " $|$ \\emph{" + escapeLatex(entry.subheading) + "}"
       : "";
-    const datePart = project.date
-      ? "{" + escapeLatex(project.date) + "}"
+    const datePart = entry.dateRange
+      ? "{" + escapeLatex(entry.dateRange) + "}"
       : "{}";
 
     lines.push("      \\resumeProjectHeading");
     lines.push(
-      "          {\\textbf{" + escapeLatex(project.name) + "}" + techPart + "}" + datePart
+      "          {\\textbf{" + escapeLatex(entry.heading) + "}" + techPart + "}" + datePart
     );
     lines.push("          \\resumeItemListStart");
 
-    for (const bullet of project.bulletPoints) {
+    for (const bullet of entry.bullets) {
       lines.push("            \\resumeItem{" + escapeLatex(bullet) + "}");
     }
 
@@ -178,34 +155,24 @@ function renderProjectsSection(projects: Resume["projects"]): string {
 }
 
 function renderSkillsSection(
-  skills: Resume["technicalSkills"]
+  title: string,
+  categories: Array<{ label: string; items: string[] }>
 ): string {
-  if (!skills) return "";
+  if (!categories || categories.length === 0) return "";
 
   const lines: string[] = [];
 
-  lines.push("%-----------PROGRAMMING SKILLS-----------");
-  lines.push("\\section{Technical Skills}");
+  lines.push(`%-----------${title.toUpperCase().replace(/ /g, "-")}-----------`);
+  lines.push(`\\section{${escapeLatex(title)}}`);
   lines.push(" \\begin{itemize}[leftmargin=0.15in, label={}]");
   lines.push("    \\small{\\item{");
 
-  if (skills.languages && skills.languages.length > 0) {
-    lines.push(
-      "     \\textbf{Languages}{: " + escapeLatex(skills.languages.join(", ")) + "} \\\\"
-    );
-  }
-  if (skills.developerTools && skills.developerTools.length > 0) {
-    lines.push(
-      "     \\textbf{Developer Tools}{: " + escapeLatex(skills.developerTools.join(", ")) + "} \\\\"
-    );
-  }
-  if (
-    skills.technologiesFrameworks &&
-    skills.technologiesFrameworks.length > 0
-  ) {
-    lines.push(
-      "     \\textbf{Technologies/Frameworks}{: " + escapeLatex(skills.technologiesFrameworks.join(", ")) + "} \\\\"
-    );
+  for (const cat of categories) {
+    if (cat.items.length > 0) {
+      lines.push(
+        "     \\textbf{" + escapeLatex(cat.label) + "}{: " + escapeLatex(cat.items.join(", ")) + "} \\\\"
+      );
+    }
   }
 
   lines.push("    }}");
@@ -215,31 +182,35 @@ function renderSkillsSection(
   return lines.join("\n");
 }
 
-function renderLeadershipSection(
-  leadership: Resume["leadership"]
-): string {
-  if (!leadership || leadership.length === 0) return "";
+function renderSimpleListSection(title: string, items: string[]): string {
+  if (!items || items.length === 0) return "";
 
   const lines: string[] = [];
 
-  lines.push("%-----------INVOLVEMENT---------------");
-  lines.push("\\section{Leadership / Extracurricular}");
-  lines.push("    \\resumeSubHeadingListStart");
+  lines.push(`%------${title.toUpperCase().replace(/ /g, "-")}-------`);
+  lines.push(`\\section{${escapeLatex(title)}}`);
+  lines.push("        \\begin{multicols}{4}");
+  lines.push("            \\begin{itemize}[itemsep=-5pt, parsep=3pt]");
 
-  for (const entry of leadership) {
-    lines.push(
-      "        \\resumeSubheading{" + escapeLatex(entry.organization) + "}{" + escapeLatex(entry.dateRange) + "}{" + escapeLatex(entry.position) + "}{" + (entry.location ? escapeLatex(entry.location) : "") + "}"
-    );
-    lines.push("            \\resumeItemListStart");
-
-    for (const bullet of entry.bulletPoints) {
-      lines.push("                \\resumeItem{" + escapeLatex(bullet) + "}");
-    }
-
-    lines.push("            \\resumeItemListEnd");
+  for (const item of items) {
+    lines.push("                \\item\\small " + escapeLatex(item));
   }
 
-  lines.push("    \\resumeSubHeadingListEnd");
+  lines.push("            \\end{itemize}");
+  lines.push("        \\end{multicols}");
+  lines.push("        \\vspace*{2.0\\multicolsep}");
+
+  return lines.join("\n");
+}
+
+function renderTextSection(title: string, content: string): string {
+  if (!content) return "";
+
+  const lines: string[] = [];
+
+  lines.push(`%-----------${title.toUpperCase().replace(/ /g, "-")}-----------`);
+  lines.push(`\\section{${escapeLatex(title)}}`);
+  lines.push("  \\small{" + escapeLatex(content) + "}");
 
   return lines.join("\n");
 }
@@ -352,17 +323,13 @@ const PREAMBLE = [
 ].join("\n");
 
 export function generateLatex(resume: Resume): string {
-  const sections: string[] = [];
+  const parts: string[] = [PREAMBLE, renderContactSection(resume.contact)];
 
-  sections.push(PREAMBLE);
-  sections.push(renderContactSection(resume.contact));
-  sections.push(renderEducationSection(resume.education));
-  sections.push(renderCourseworkSection(resume.relevantCoursework));
-  sections.push(renderExperienceSection(resume.experience));
-  sections.push(renderProjectsSection(resume.projects));
-  sections.push(renderSkillsSection(resume.technicalSkills));
-  sections.push(renderLeadershipSection(resume.leadership));
-  sections.push("\\end{document}");
+  for (const section of resume.sections) {
+    const rendered = renderSection(section);
+    if (rendered) parts.push(rendered);
+  }
 
-  return sections.join("\n\n");
+  parts.push("\\end{document}");
+  return parts.join("\n\n");
 }

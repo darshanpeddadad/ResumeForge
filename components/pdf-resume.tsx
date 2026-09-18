@@ -9,7 +9,7 @@ import {
   Link,
   StyleSheet,
 } from "@react-pdf/renderer"
-import type { Resume } from "@/lib/schemas/resume"
+import type { Resume, ResumeSection } from "@/lib/schemas/resume"
 import { parseContactUrl } from "@/lib/contact-links"
 
 const styles = StyleSheet.create({
@@ -100,7 +100,7 @@ interface PdfResumeProps {
 }
 
 export function PdfResume({ resume }: PdfResumeProps) {
-  const { contact, education, relevantCoursework, experience, projects, technicalSkills, leadership } = resume
+  const { contact, sections } = resume
 
   const parsedLinkedin = parseContactUrl(contact.linkedin || "", "linkedin")
   const parsedGithub = parseContactUrl(contact.github || "", "github")
@@ -154,156 +154,136 @@ export function PdfResume({ resume }: PdfResumeProps) {
           )}
         </View>
 
-        {/* Education */}
-        {education.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Education</Text>
-            {education.map((edu, i) => (
-              <View key={i} style={styles.block}>
-                <View style={styles.row}>
-                  <Text style={styles.bold}>
-                    <RichPdfText text={edu.institution} />
-                  </Text>
-                  <Text style={styles.meta}>{edu.dateRange}</Text>
-                </View>
-                <View style={styles.row}>
-                  <Text style={styles.italic}>
-                    <RichPdfText text={edu.degree} />
-                  </Text>
-                  <Text style={styles.meta}>{edu.location}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Relevant Coursework */}
-        {relevantCoursework.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Relevant Coursework</Text>
-            <View style={styles.coursework}>
-              {relevantCoursework.map((course, i) => (
-                <Text key={i} style={styles.courseworkItem}>
-                  {course}
-                </Text>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Experience */}
-        {experience.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Experience</Text>
-            {experience.map((exp, i) => (
-              <View key={i} style={styles.block}>
-                <View style={styles.row}>
-                  <Text style={styles.bold}>
-                    <RichPdfText text={exp.company} />
-                  </Text>
-                  <Text style={styles.meta}>{exp.dateRange}</Text>
-                </View>
-                <View style={styles.row}>
-                  <Text style={styles.italic}>
-                    <RichPdfText text={exp.position} />
-                  </Text>
-                  <Text style={styles.meta}>{exp.location}</Text>
-                </View>
-                <View style={styles.bullets}>
-                  {exp.bulletPoints.map((bullet, j) => (
-                    <Bullet key={j} text={bullet} />
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Projects */}
-        {projects.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Projects</Text>
-            {projects.map((project, i) => (
-              <View key={i} style={styles.block}>
-                <View style={styles.row}>
-                  <Text style={styles.bold}>
-                    <RichPdfText text={project.name} />
-                    {project.technologies && (
-                      <Text style={styles.italic}>{" | "}
-                        <RichPdfText text={project.technologies} />
-                      </Text>
-                    )}
-                  </Text>
-                  <Text style={styles.meta}>{project.date}</Text>
-                </View>
-                <View style={styles.bullets}>
-                  {project.bulletPoints.map((bullet, j) => (
-                    <Bullet key={j} text={bullet} />
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Technical Skills */}
-        {technicalSkills && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Technical Skills</Text>
-            <View style={styles.skills}>
-              {technicalSkills.languages.length > 0 && (
-                <Text style={styles.skillsRow}>
-                  <Text style={styles.bold}>Languages: </Text>
-                  {technicalSkills.languages.join(", ")}
-                </Text>
-              )}
-              {technicalSkills.developerTools.length > 0 && (
-                <Text style={styles.skillsRow}>
-                  <Text style={styles.bold}>Developer Tools: </Text>
-                  {technicalSkills.developerTools.join(", ")}
-                </Text>
-              )}
-              {technicalSkills.technologiesFrameworks.length > 0 && (
-                <Text style={styles.skillsRow}>
-                  <Text style={styles.bold}>Technologies/Frameworks: </Text>
-                  {technicalSkills.technologiesFrameworks.join(", ")}
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Leadership */}
-        {leadership.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Leadership / Extracurricular</Text>
-            {leadership.map((entry, i) => (
-              <View key={i} style={styles.block}>
-                <View style={styles.row}>
-                  <Text style={styles.bold}>
-                    <RichPdfText text={entry.organization} />
-                  </Text>
-                  <Text style={styles.meta}>{entry.dateRange}</Text>
-                </View>
-                <View style={styles.row}>
-                  <Text style={styles.italic}>
-                    <RichPdfText text={entry.position} />
-                  </Text>
-                  <Text style={styles.meta}>{entry.location}</Text>
-                </View>
-                <View style={styles.bullets}>
-                  {entry.bulletPoints.map((bullet, j) => (
-                    <Bullet key={j} text={bullet} />
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* Dynamic sections in array order */}
+        {sections.map((section) => (
+          <PdfSection key={section.id} section={section} />
+        ))}
       </Page>
     </Document>
   )
 }
+
+// ─── Section dispatcher ───────────────────────────────────────────────────────
+
+function PdfSection({ section }: { section: ResumeSection }) {
+  switch (section.type) {
+    case "bullet_list": {
+      if (!section.entries || section.entries.length === 0) return null;
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          {section.entries.map((entry, i) => (
+            <View key={i} style={styles.block}>
+              <View style={styles.row}>
+                <Text style={styles.bold}>
+                  <RichPdfText text={entry.heading} />
+                </Text>
+                <Text style={styles.meta}>{entry.dateRange}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.italic}>
+                  <RichPdfText text={entry.subheading} />
+                </Text>
+                <Text style={styles.meta}>{entry.location ?? ""}</Text>
+              </View>
+              <View style={styles.bullets}>
+                {entry.bullets.map((bullet, j) => (
+                  <Bullet key={j} text={bullet} />
+                ))}
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    case "projects": {
+      if (!section.entries || section.entries.length === 0) return null;
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          {section.entries.map((entry, i) => (
+            <View key={i} style={styles.block}>
+              <View style={styles.row}>
+                <Text style={styles.bold}>
+                  <RichPdfText text={entry.heading} />
+                  {entry.subheading && (
+                    <Text style={styles.italic}>{" | "}
+                      <RichPdfText text={entry.subheading} />
+                    </Text>
+                  )}
+                </Text>
+                <Text style={styles.meta}>{entry.dateRange}</Text>
+              </View>
+              <View style={styles.bullets}>
+                {entry.bullets.map((bullet, j) => (
+                  <Bullet key={j} text={bullet} />
+                ))}
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    case "skills": {
+      const validCategories = (section.categories || []).filter((c) => c && c.items && c.items.length > 0);
+      const hasFlatItems = section.items && section.items.length > 0;
+      if (validCategories.length === 0 && !hasFlatItems) return null;
+
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          <View style={styles.skills}>
+            {validCategories.length > 0 ? (
+              validCategories.map((cat, i) => (
+                <Text key={i} style={styles.skillsRow}>
+                  <Text style={styles.bold}>{cat.label}: </Text>
+                  {cat.items.join(", ")}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.skillsRow}>
+                {section.items?.join(", ")}
+              </Text>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    case "simple_list": {
+      if (!section.items || section.items.length === 0) return null;
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          <View style={styles.coursework}>
+            {section.items.map((item, i) => (
+              <Text key={i} style={styles.courseworkItem}>
+                {item}
+              </Text>
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    case "text": {
+      if (!section.content || !section.content.trim()) return null;
+      return (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          <Text style={{ fontSize: 9 }}>{section.content}</Text>
+        </View>
+      );
+    }
+
+    default:
+      return null;
+  }
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Bullet({ text }: { text: string }) {
   return (

@@ -1,11 +1,10 @@
-﻿export const maxDuration = 120;
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
 import { parseResumeWithLLM } from "@/lib/llm";
-import { humanizeResume } from "@/lib/humanizer";
 import { buildHighlights } from "@/lib/highlights";
 import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
@@ -60,65 +59,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let result;
-    try {
-      result = await parseResumeWithLLM(
-        resumeText,
-        jobDescription || undefined,
-        provider,
-        apiKey,
-        modelId
-      );
-    } catch (primaryErr) {
-      if (provider === "google") {
-        const fallbacks = [
-          "gemini-3.6-flash",
-          "gemini-3.5-flash-lite",
-          "gemini-3.5-flash",
-        ].filter((m) => m !== modelId);
+    // parseResumeWithLLM generates the resume, embeds the 5 bullet archetypes,
+    // and runs sanitizeAiPatterns in a single fast, unified pass.
+    const result = await parseResumeWithLLM(
+      resumeText,
+      jobDescription || undefined,
+      provider,
+      apiKey,
+      modelId
+    );
 
-        let fallbackSuccess = false;
-        let lastError = primaryErr;
-
-        for (const fbModel of fallbacks) {
-          safeLog.warn(
-            `Primary model ${modelId} failed (${(primaryErr as Error).message}), attempting fallback to ${fbModel}...`
-          );
-          try {
-            result = await parseResumeWithLLM(
-              resumeText,
-              jobDescription || undefined,
-              provider,
-              apiKey,
-              fbModel
-            );
-            fallbackSuccess = true;
-            break;
-          } catch (fbErr) {
-            lastError = fbErr;
-          }
-        }
-
-        if (!fallbackSuccess || !result) {
-          throw lastError;
-        }
-      } else {
-        throw primaryErr;
-      }
-    }
-
-    if (!result) {
+    if (!result || !result.resume) {
       throw new Error("Resume generation produced no output");
     }
 
-    let { resume, aiChanges } = result;
-
-    // Automatically run the blader/humanizer engine on the resume bullet points
-    try {
-      resume = await humanizeResume(resume, provider, apiKey, modelId);
-    } catch (hErr) {
-      safeLog.warn("Resume auto-humanize fallback:", hErr);
-    }
+    const { resume, aiChanges } = result;
 
     const highlights = buildHighlights(
       aiChanges,
@@ -141,4 +96,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

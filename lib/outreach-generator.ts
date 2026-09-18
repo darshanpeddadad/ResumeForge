@@ -1,7 +1,4 @@
 import { generateText, Output } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { Resume } from "@/lib/schemas/resume";
 import type { Provider } from "@/lib/ai-models";
@@ -32,9 +29,7 @@ const outreachValuesSchema = z.object({
   }),
 });
 
-type OutreachValues = z.infer<typeof outreachValuesSchema>;
-
-// getModel is now handled by @/lib/ai-runner with universal fallback
+export type OutreachValues = z.infer<typeof outreachValuesSchema>;
 
 export async function generateOutreach(
   resume: Resume,
@@ -43,14 +38,22 @@ export async function generateOutreach(
   apiKey: string,
   modelId?: string
 ): Promise<OutreachValues> {
+  const bulletSections = resume.sections.filter(
+    (s) => s.type === "bullet_list" || s.type === "projects"
+  );
+
+  const skillsSection = resume.sections.find((s) => s.type === "skills");
+
   const resumeSummary = [
     `Name: ${resume.contact.name}`,
     `Email: ${resume.contact.email}`,
     resume.contact.linkedin ? `LinkedIn: ${resume.contact.linkedin}` : "",
     resume.contact.github ? `GitHub: ${resume.contact.github}` : "",
-    `Experience: ${resume.experience.map((e) => `${e.position} at ${e.company}`).join("; ")}`,
-    `Skills: ${resume.technicalSkills.languages.join(", ")}, ${resume.technicalSkills.developerTools.join(", ")}, ${resume.technicalSkills.technologiesFrameworks.join(", ")}`,
-    `Projects: ${resume.projects.map((p) => p.name).join(", ")}`,
+    `Experience: ${bulletSections.filter((s) => s.type === "bullet_list").flatMap((s) => s.entries).map((e) => `${e.subheading} at ${e.heading}`).join("; ")}`,
+    skillsSection
+      ? `Skills: ${skillsSection.categories.flatMap((c) => c.items).join(", ")}`
+      : "",
+    `Projects: ${bulletSections.filter((s) => s.type === "projects").flatMap((s) => s.entries).map((e) => e.heading).join(", ")}`,
   ]
     .filter(Boolean)
     .join("\n");

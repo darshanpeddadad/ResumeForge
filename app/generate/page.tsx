@@ -114,19 +114,37 @@ export default function GeneratePage() {
         }),
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        setError({
-          message:
-            data.hint ||
-            data.error ||
-            "Failed to parse resume. Check your API key in Settings.",
-          toSettings: !!data.redirect || response.status === 403,
-        })
-        return
+      let data: any = null;
+      try {
+        const rawText = await response.text();
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        // Response was not JSON (e.g. Vercel 504 Gateway Timeout HTML page)
       }
 
-      const { resume, highlights } = await response.json()
+      if (!response.ok) {
+        let msg = data?.hint || data?.error;
+        if (!msg) {
+          if (response.status === 504) {
+            msg = "The request timed out (504 Gateway Timeout). The serverless function took too long to complete. Please try again.";
+          } else if (response.status === 502 || response.status === 503) {
+            msg = `Service temporarily unavailable (${response.status}). Please try again in a few seconds.`;
+          } else {
+            msg = `Failed to parse resume (Status ${response.status}). Please check your AI API key in Settings.`;
+          }
+        }
+        setError({
+          message: msg,
+          toSettings: !!data?.redirect || response.status === 403,
+        });
+        return;
+      }
+
+      if (!data || !data.resume) {
+        throw new Error("Invalid response received from server. Please try again.");
+      }
+
+      const { resume, highlights } = data;
 
       // Hyperlink targets (e.g. annotations in PDF or raw text in DOCX)
       const contactLinks = await extractLinksFromFile(resumeFile)

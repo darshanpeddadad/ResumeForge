@@ -6,15 +6,13 @@ export interface EntryHighlights {
   jd: Record<number, string[]>;
 }
 
+// Keyed by section title (unique within a resume)
 export interface Highlights {
-  experience: EntryHighlights[];
-  projects: EntryHighlights[];
-  leadership: EntryHighlights[];
-  addedSkills: string[];
-  addedCoursework: string[];
+  bySectionTitle: Record<string, EntryHighlights[]>;
+  addedSkillItems: string[];
+  addedListItems: string[];
+  addedSections: string[];
 }
-
-type SectionName = "experience" | "projects" | "leadership";
 
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "from", "that", "this", "your", "you",
@@ -26,8 +24,6 @@ const STOPWORDS = new Set([
   "it", "is", "be", "we", "not", "but", "if", "so", "do", "per", "job",
 ]);
 
-// Generic single words that would produce noisy highlights on their own; only
-// applied to 1-token phrases (multi-word phrases are always specific enough).
 const GENERIC_TERMS = new Set([
   "software", "engineer", "engineering", "engineers", "developer",
   "development", "developing", "experience", "experienced", "building",
@@ -40,11 +36,9 @@ const GENERIC_TERMS = new Set([
 ]);
 
 function normalizeTerm(token: string): string {
-  return token.toLowerCase().replace(/[.,;:!?()'"“”]/g, "");
+  return token.toLowerCase().replace(/[.,;:!?()'\"""]/g, "");
 }
 
-// Returns candidate JD phrases (1-3 token n-grams), longest first so that
-// overlapping matches resolve to the most specific phrase.
 export function tokenizeJd(jobDescription: string): string[] {
   if (!jobDescription) return [];
 
@@ -68,85 +62,17 @@ export function tokenizeJd(jobDescription: string): string[] {
   return [...phrases].sort((a, b) => b.length - a.length);
 }
 
-function sectionEntries(resume: Resume, section: SectionName) {
-  return section === "experience"
-    ? resume.experience
-    : section === "projects"
-      ? resume.projects
-      : resume.leadership;
-}
-
-// Maps exact bullet strings to (entry * 1000 + bulletIndex) codes. Annotated
-// text that doesn't match the final resume is silently dropped.
-function resolveBullets(
-  resume: Resume,
-  section: SectionName,
-  texts: string[]
-): number[] {
-  const entries = sectionEntries(resume, section);
-  const codes: number[] = [];
-  for (const text of texts) {
-    scan: for (let e = 0; e < entries.length; e++) {
-      const bullets = entries[e].bulletPoints;
-      for (let b = 0; b < bullets.length; b++) {
-        if (bullets[b] === text) {
-          codes.push(e * 1000 + b);
-          break scan;
-        }
-      }
-    }
-  }
-  return codes;
-}
-
-function matchJdKeywords(
-  resume: Resume,
-  section: SectionName,
+function matchJdKeywordsForSection(
+  bullets: string[],
   phrases: string[]
-): EntryHighlights[] {
-  return sectionEntries(resume, section).map((entry) => {
-    const jd: Record<number, string[]> = {};
-    entry.bulletPoints.forEach((bullet, b) => {
-      const text = bullet.toLowerCase();
-      const found = phrases.filter((p) => text.includes(p));
-      if (found.length > 0) jd[b] = found;
-    });
-    return { added: [], tailored: [], jd };
+): Record<number, string[]> {
+  const jd: Record<number, string[]> = {};
+  bullets.forEach((bullet, b) => {
+    const text = bullet.toLowerCase();
+    const found = phrases.filter((p) => text.includes(p));
+    if (found.length > 0) jd[b] = found;
   });
-}
-
-function buildSection(
-  resume: Resume,
-  section: SectionName,
-  addedFlat: number[],
-  tailoredFlat: number[],
-  jdPhrases: string[]
-): EntryHighlights[] {
-  const flat = (
-    codes: number[],
-    e: number
-  ) => codes.filter((c) => Math.floor(c / 1000) === e).map((c) => c % 1000);
-
-  return matchJdKeywords(resume, section, jdPhrases).map((jd, e) => ({
-    added: flat(addedFlat, e),
-    tailored: flat(tailoredFlat, e),
-    jd: jd.jd,
-  }));
-}
-
-function bucketTexts(
-  aiChanges: AiChanges,
-  kind: "addedBullets" | "tailoredBullets"
-): Record<SectionName, string[]> {
-  const out: Record<SectionName, string[]> = {
-    experience: [],
-    projects: [],
-    leadership: [],
-  };
-  for (const bucket of aiChanges[kind]) {
-    out[bucket.section].push(...bucket.bullets);
-  }
-  return out;
+  return jd;
 }
 
 function keepIfAbsentInText(
@@ -170,63 +96,92 @@ export function buildHighlights(
   resumeText: string,
   jobDescription?: string
 ): Highlights {
-  const addedTexts = bucketTexts(aiChanges, "addedBullets");
-  const tailoredTexts = bucketTexts(aiChanges, "tailoredBullets");
   const jdPhrases = tokenizeJd(jobDescription || "");
   const excludedJdTerms = new Set(jdPhrases.map((p) => normalizeTerm(p)));
 
-  const build = (section: SectionName) =>
-    buildSection(
-      resume,
-      section,
-      resolveBullets(resume, section, addedTexts[section]),
-      resolveBullets(resume, section, tailoredTexts[section]),
-      jdPhrases
-    );
+  // Build lookup: sectionTitle → added bullet texts
+  const addedByTitle: Record<string, string[]> = {};
+  const tailoredByTitle: Record<string, string[]> = {};
+
+  for (const bucket of aiChanges.addedBullets) {
+    addedByTitle[bucket.sectionTitle] = [
+      ...(addedByTitle[bucket.sectionTitle] ?? []),
+      ...bucket.bullets,
+    ];
+  }
+  for (const bucket of aiChanges.tailoredBullets) {
+    tailoredByTitle[bucket.sectionTitle] = [
+      ...(tailoredByTitle[bucket.sectionTitle] ?? []),
+      ...bucket.bullets,
+    ];
+  }
+
+  const bySectionTitle: Record<string, EntryHighlights[]> = {};
+
+  for (const section of resume.sections) {
+    if (section.type !== "bullet_list" && section.type !== "projects") continue;
+
+    const addedTexts = new Set(addedByTitle[section.title] ?? []);
+    const tailoredTexts = new Set(tailoredByTitle[section.title] ?? []);
+
+    bySectionTitle[section.title] = section.entries.map((entry) => {
+      const added: number[] = [];
+      const tailored: number[] = [];
+      entry.bullets.forEach((bullet, bi) => {
+        if (addedTexts.has(bullet)) added.push(bi);
+        else if (tailoredTexts.has(bullet)) tailored.push(bi);
+      });
+      const jd = matchJdKeywordsForSection(entry.bullets, jdPhrases);
+      return { added, tailored, jd };
+    });
+  }
 
   return {
-    experience: build("experience"),
-    projects: build("projects"),
-    leadership: build("leadership"),
-    addedSkills: keepIfAbsentInText(
-      aiChanges.addedSkills,
+    bySectionTitle,
+    addedSkillItems: keepIfAbsentInText(
+      aiChanges.addedSkillItems,
       resumeText,
       excludedJdTerms
     ),
-    addedCoursework: keepIfAbsentInText(
-      aiChanges.addedCoursework,
+    addedListItems: keepIfAbsentInText(
+      aiChanges.addedListItems,
       resumeText,
       excludedJdTerms
     ),
+    addedSections: aiChanges.addedSections ?? [],
   };
 }
 
 export function emptyHighlights(resume: Resume): Highlights {
-  const section = (count: number): EntryHighlights[] =>
-    Array.from({ length: count }, () => ({ added: [], tailored: [], jd: {} }));
+  const bySectionTitle: Record<string, EntryHighlights[]> = {};
+  for (const section of resume.sections) {
+    if (section.type !== "bullet_list" && section.type !== "projects") continue;
+    bySectionTitle[section.title] = section.entries.map(() => ({
+      added: [],
+      tailored: [],
+      jd: {},
+    }));
+  }
   return {
-    experience: section(resume.experience.length),
-    projects: section(resume.projects.length),
-    leadership: section(resume.leadership.length),
-    addedSkills: [],
-    addedCoursework: [],
+    bySectionTitle,
+    addedSkillItems: [],
+    addedListItems: [],
+    addedSections: [],
   };
 }
 
 export function hasHighlights(highlights: Highlights): boolean {
-  const sections = [
-    ...highlights.experience,
-    ...highlights.projects,
-    ...highlights.leadership,
-  ];
   return (
-    sections.some(
-      (s) =>
-        s.added.length > 0 ||
-        s.tailored.length > 0 ||
-        Object.keys(s.jd).length > 0
+    Object.values(highlights.bySectionTitle).some((entries) =>
+      entries.some(
+        (e) =>
+          e.added.length > 0 ||
+          e.tailored.length > 0 ||
+          Object.keys(e.jd).length > 0
+      )
     ) ||
-    highlights.addedSkills.length > 0 ||
-    highlights.addedCoursework.length > 0
+    highlights.addedSkillItems.length > 0 ||
+    highlights.addedListItems.length > 0 ||
+    highlights.addedSections.length > 0
   );
 }

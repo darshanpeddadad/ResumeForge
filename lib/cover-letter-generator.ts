@@ -1,7 +1,4 @@
 import { generateText, Output } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { Resume } from "@/lib/schemas/resume";
 import type { Provider } from "@/lib/ai-models";
@@ -20,8 +17,6 @@ export const coverLetterSchema = z.object({
 });
 
 export type CoverLetterResult = z.infer<typeof coverLetterSchema>;
-
-// getModel is now handled by @/lib/ai-runner with universal fallback
 
 const COVER_LETTER_SYSTEM_PROMPT = `You are an expert career advisor and technical recruiter creating a tailored, high-impact cover letter based on a candidate's resume and a specific job description.
 
@@ -61,6 +56,13 @@ export async function generateCoverLetter(
   modelId?: string,
   pastCoverLetter?: string
 ): Promise<CoverLetterResult> {
+  // Build a text summary from dynamic sections
+  const bulletSections = resume.sections.filter(
+    (s) => s.type === "bullet_list" || s.type === "projects"
+  );
+
+  const skillsSection = resume.sections.find((s) => s.type === "skills");
+
   const resumeSummary = [
     `Name: ${resume.contact.name}`,
     `Email: ${resume.contact.email}`,
@@ -69,27 +71,22 @@ export async function generateCoverLetter(
     resume.contact.linkedin ? `LinkedIn: ${resume.contact.linkedin}` : "",
     resume.contact.github ? `GitHub: ${resume.contact.github}` : "",
     "",
-    "EDUCATION:",
-    ...resume.education.map(
-      (e) => `- ${e.degree} at ${e.institution} (${e.dateRange})`
-    ),
-    "",
-    "EXPERIENCE:",
-    ...resume.experience.flatMap((e) => [
-      `- ${e.position} at ${e.company} (${e.dateRange}):`,
-      ...e.bulletPoints.map((b) => `  * ${b}`),
+    ...bulletSections.flatMap((section) => [
+      `${section.title.toUpperCase()}:`,
+      ...section.entries.flatMap((e) => [
+        `- ${e.heading}${e.subheading ? ` — ${e.subheading}` : ""} (${e.dateRange}):`,
+        ...e.bullets.map((b) => `  * ${b}`),
+      ]),
+      "",
     ]),
-    "",
-    "PROJECTS:",
-    ...resume.projects.flatMap((p) => [
-      `- ${p.name} (${p.technologies}):`,
-      ...p.bulletPoints.map((b) => `  * ${b}`),
-    ]),
-    "",
-    "SKILLS:",
-    `Languages: ${resume.technicalSkills.languages.join(", ")}`,
-    `Developer Tools: ${resume.technicalSkills.developerTools.join(", ")}`,
-    `Technologies & Frameworks: ${resume.technicalSkills.technologiesFrameworks.join(", ")}`,
+    skillsSection
+      ? [
+          "SKILLS:",
+          ...skillsSection.categories.map(
+            (cat) => `${cat.label}: ${cat.items.join(", ")}`
+          ),
+        ].join("\n")
+      : "",
   ]
     .filter(Boolean)
     .join("\n");

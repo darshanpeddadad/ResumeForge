@@ -1,9 +1,8 @@
 "use client"
 
-import type { Resume } from "@/lib/schemas/resume"
+import type { Resume, ResumeSection, BulletEntry } from "@/lib/schemas/resume"
 import { parseContactUrl } from "@/lib/contact-links"
-import { hasHighlights, type Highlights } from "@/lib/highlights"
-import type { EntryHighlights } from "@/lib/highlights"
+import { hasHighlights, type Highlights, type EntryHighlights } from "@/lib/highlights"
 
 interface ResumePreviewProps {
   resume: Resume
@@ -29,17 +28,15 @@ const ADDED_CHIP_STYLE: React.CSSProperties = {
 }
 
 export function ResumePreview({ resume, highlights }: ResumePreviewProps) {
-  const { contact, education, relevantCoursework, experience, projects, technicalSkills, leadership } = resume
+  const { contact, sections } = resume
 
   const parsedLinkedin = parseContactUrl(contact.linkedin || "", "linkedin")
   const parsedGithub = parseContactUrl(contact.github || "", "github")
 
   const showLegend = highlights ? hasHighlights(highlights) : false
-  const addedSkills = new Set(highlights?.addedSkills ?? [])
-  const addedCoursework = new Set(highlights?.addedCoursework ?? [])
-
-  const entryAt = (section: EntryHighlights[] | undefined, i: number): EntryHighlights =>
-    section?.[i] ?? EMPTY_ENTRY
+  const addedSkillItems = new Set(highlights?.addedSkillItems ?? [])
+  const addedListItems = new Set(highlights?.addedListItems ?? [])
+  const addedSectionTitles = new Set(highlights?.addedSections ?? [])
 
   return (
     <div
@@ -58,7 +55,7 @@ export function ResumePreview({ resume, highlights }: ResumePreviewProps) {
     >
       {showLegend && <HighlightLegend />}
 
-      {/* Header */}
+      {/* Header / Contact */}
       <div style={{ textAlign: "center", marginBottom: "8px" }}>
         <h1 style={{ fontSize: "22px", fontWeight: "bold", letterSpacing: "0.05em", margin: 0 }}>
           {contact.name}
@@ -77,157 +74,153 @@ export function ResumePreview({ resume, highlights }: ResumePreviewProps) {
         </p>
       </div>
 
-      {/* Education */}
-      {education.length > 0 && (
-        <Section title="Education">
-          {education.map((edu, i) => (
-            <div key={i} style={{ marginBottom: "4px" }}>
+      {/* Dynamic sections — rendered in array order */}
+      {sections.map((section) => (
+        <SectionBlock
+          key={section.id}
+          section={section}
+          highlights={highlights}
+          addedSkillItems={addedSkillItems}
+          addedListItems={addedListItems}
+          addedSectionTitles={addedSectionTitles}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ─── Section dispatcher ───────────────────────────────────────────────────────
+
+function SectionBlock({
+  section,
+  highlights,
+  addedSkillItems,
+  addedListItems,
+  addedSectionTitles,
+}: {
+  section: ResumeSection
+  highlights?: Highlights | null
+  addedSkillItems: Set<string>
+  addedListItems: Set<string>
+  addedSectionTitles: Set<string>
+}) {
+  const titleStyle: React.CSSProperties = addedSectionTitles.has(section.title)
+    ? { ...ADDED_CHIP_STYLE, display: "inline-block" }
+    : {}
+
+  const sectionEntryHighlights = highlights?.bySectionTitle[section.title]
+  const entryAt = (i: number): EntryHighlights =>
+    sectionEntryHighlights?.[i] ?? EMPTY_ENTRY
+
+  switch (section.type) {
+    case "bullet_list": {
+      if (!section.entries || section.entries.length === 0) return null;
+      return (
+        <Section title={section.title} titleStyle={titleStyle}>
+          {section.entries.map((entry, i) => (
+            <div key={i} style={{ marginBottom: "8px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
-                <span><RichText text={edu.institution} /></span>
-                <span style={{ fontSize: "10px" }}>{edu.dateRange}</span>
+                <span><RichText text={entry.heading} /></span>
+                <span style={{ fontSize: "10px" }}>{entry.dateRange}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontStyle: "italic", fontSize: "10px" }}>
-                <span><RichText text={edu.degree} /></span>
-                <span>{edu.location}</span>
+                <span><RichText text={entry.subheading} /></span>
+                <span>{entry.location}</span>
               </div>
+              {entry.bullets && entry.bullets.length > 0 && (
+                <ul style={{ listStyleType: "disc", marginLeft: "16px", marginTop: "2px" }}>
+                  {entry.bullets.map((bullet, j) => (
+                    <BulletItem key={j} text={bullet} hl={entryAt(i)} bulletIndex={j} />
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </Section>
-      )}
+      );
+    }
 
-      {/* Relevant Coursework */}
-      {relevantCoursework.length > 0 && (
-        <Section title="Relevant Coursework">
+    case "projects": {
+      if (!section.entries || section.entries.length === 0) return null;
+      return (
+        <Section title={section.title} titleStyle={titleStyle}>
+          {section.entries.map((entry, i) => (
+            <div key={i} style={{ marginBottom: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>
+                  <strong><RichText text={entry.heading} /></strong>
+                  {entry.subheading && <em> | <RichText text={entry.subheading} /></em>}
+                </span>
+                <span style={{ fontSize: "10px" }}>{entry.dateRange}</span>
+              </div>
+              {entry.bullets && entry.bullets.length > 0 && (
+                <ul style={{ listStyleType: "disc", marginLeft: "16px", marginTop: "2px" }}>
+                  {entry.bullets.map((bullet, j) => (
+                    <BulletItem key={j} text={bullet} hl={entryAt(i)} bulletIndex={j} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </Section>
+      );
+    }
+
+    case "skills": {
+      const validCategories = (section.categories || []).filter((c) => c && c.items && c.items.length > 0);
+      const hasFlatItems = section.items && section.items.length > 0;
+      if (validCategories.length === 0 && !hasFlatItems) return null;
+
+      return (
+        <Section title={section.title} titleStyle={titleStyle}>
+          <div style={{ fontSize: "10px" }}>
+            {validCategories.length > 0 ? (
+              validCategories.map((cat, i) => (
+                <p key={i} style={{ margin: "1px 0" }}>
+                  <strong>{cat.label}:</strong>{" "}
+                  <SkillTokens skills={cat.items} added={addedSkillItems} />
+                </p>
+              ))
+            ) : (
+              <p style={{ margin: "1px 0" }}>
+                <SkillTokens skills={section.items || []} added={addedSkillItems} />
+              </p>
+            )}
+          </div>
+        </Section>
+      );
+    }
+
+    case "simple_list": {
+      if (!section.items || section.items.length === 0) return null;
+      return (
+        <Section title={section.title} titleStyle={titleStyle}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "2px 8px", fontSize: "10px" }}>
-            {relevantCoursework.map((course, i) => (
-              <span key={i} style={addedCoursework.has(course) ? ADDED_CHIP_STYLE : undefined}>
-                {course}
+            {section.items.map((item, i) => (
+              <span key={i} style={addedListItems.has(item) ? ADDED_CHIP_STYLE : undefined}>
+                {item}
               </span>
             ))}
           </div>
         </Section>
-      )}
+      );
+    }
 
-      {/* Experience */}
-      {experience.length > 0 && (
-        <Section title="Experience">
-          {experience.map((exp, i) => {
-            const hl = entryAt(highlights?.experience, i)
-            return (
-              <div key={i} style={{ marginBottom: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
-                  <span><RichText text={exp.company} /></span>
-                  <span style={{ fontSize: "10px" }}>{exp.dateRange}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontStyle: "italic", fontSize: "10px" }}>
-                  <span><RichText text={exp.position} /></span>
-                  <span>{exp.location}</span>
-                </div>
-                <ul style={{ listStyleType: "disc", marginLeft: "16px", marginTop: "2px" }}>
-                  {exp.bulletPoints.map((bullet, j) => (
-                    <BulletItem
-                      key={j}
-                      text={bullet}
-                      hl={hl}
-                      bulletIndex={j}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )
-          })}
+    case "text": {
+      if (!section.content || !section.content.trim()) return null;
+      return (
+        <Section title={section.title} titleStyle={titleStyle}>
+          <p style={{ fontSize: "10px", margin: "2px 0" }}>{section.content}</p>
         </Section>
-      )}
+      );
+    }
 
-      {/* Projects */}
-      {projects.length > 0 && (
-        <Section title="Projects">
-          {projects.map((project, i) => {
-            const hl = entryAt(highlights?.projects, i)
-            return (
-              <div key={i} style={{ marginBottom: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>
-                    <strong><RichText text={project.name} /></strong>
-                    {project.technologies && <em> | <RichText text={project.technologies} /></em>}
-                  </span>
-                  <span style={{ fontSize: "10px" }}>{project.date}</span>
-                </div>
-                <ul style={{ listStyleType: "disc", marginLeft: "16px", marginTop: "2px" }}>
-                  {project.bulletPoints.map((bullet, j) => (
-                    <BulletItem
-                      key={j}
-                      text={bullet}
-                      hl={hl}
-                      bulletIndex={j}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )
-          })}
-        </Section>
-      )}
-
-      {/* Technical Skills */}
-      {technicalSkills && (
-        <Section title="Technical Skills">
-          <div style={{ fontSize: "10px" }}>
-            {technicalSkills.languages.length > 0 && (
-              <p style={{ margin: "1px 0" }}>
-                <strong>Languages:</strong>{" "}
-                <SkillTokens skills={technicalSkills.languages} added={addedSkills} />
-              </p>
-            )}
-            {technicalSkills.developerTools.length > 0 && (
-              <p style={{ margin: "1px 0" }}>
-                <strong>Developer Tools:</strong>{" "}
-                <SkillTokens skills={technicalSkills.developerTools} added={addedSkills} />
-              </p>
-            )}
-            {technicalSkills.technologiesFrameworks.length > 0 && (
-              <p style={{ margin: "1px 0" }}>
-                <strong>Technologies/Frameworks:</strong>{" "}
-                <SkillTokens skills={technicalSkills.technologiesFrameworks} added={addedSkills} />
-              </p>
-            )}
-          </div>
-        </Section>
-      )}
-
-      {/* Leadership */}
-      {leadership.length > 0 && (
-        <Section title="Leadership / Extracurricular">
-          {leadership.map((entry, i) => {
-            const hl = entryAt(highlights?.leadership, i)
-            return (
-              <div key={i} style={{ marginBottom: "4px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
-                  <span><RichText text={entry.organization} /></span>
-                  <span style={{ fontSize: "10px" }}>{entry.dateRange}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontStyle: "italic", fontSize: "10px" }}>
-                  <span><RichText text={entry.position} /></span>
-                  <span>{entry.location}</span>
-                </div>
-                <ul style={{ listStyleType: "disc", marginLeft: "16px", marginTop: "2px" }}>
-                  {entry.bulletPoints.map((bullet, j) => (
-                    <BulletItem
-                      key={j}
-                      text={bullet}
-                      hl={hl}
-                      bulletIndex={j}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )
-          })}
-        </Section>
-      )}
-    </div>
-  )
+    default:
+      return null;
+  }
 }
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function BulletItem({
   text,
@@ -317,8 +310,6 @@ function RichText({ text, phrases = [] }: { text: string; phrases?: string[] }) 
   )
 }
 
-// Wraps every occurrence of the given phrases in a <mark> highlight, merging
-// overlapping spans (longest phrase wins).
 function highlightPhrases(text: string, phrases: string[]): React.ReactNode {
   if (!phrases || phrases.length === 0) return text
 
@@ -363,18 +354,28 @@ function highlightPhrases(text: string, phrases: string[]): React.ReactNode {
   return nodes
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  titleStyle,
+  children,
+}: {
+  title: string
+  titleStyle?: React.CSSProperties
+  children: React.ReactNode
+}) {
   return (
     <div style={{ marginTop: "8px" }}>
-      <h2 style={{
-        fontSize: "14px",
-        fontWeight: "bold",
-        textTransform: "uppercase",
-        borderBottom: "1px solid #000000",
-        paddingBottom: "2px",
-        marginBottom: "4px",
-      }}>
-        {title}
+      <h2
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          textTransform: "uppercase",
+          borderBottom: "1px solid #000000",
+          paddingBottom: "2px",
+          marginBottom: "4px",
+        }}
+      >
+        <span style={titleStyle}>{title}</span>
       </h2>
       {children}
     </div>
