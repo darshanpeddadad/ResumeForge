@@ -5,19 +5,21 @@ import { File01Icon } from "@/components/ui/file-01"
 import { CloudUploadIcon } from "@/components/ui/cloud-upload"
 import { Button } from "@/components/ui/button"
 
-
 interface ResumeUploadStep {
   onFileSelect: (file: File) => void
 }
 
 export function ResumeUploadStep({ onFileSelect }: ResumeUploadStep) {
   const [fileName, setFileName] = useState<string | null>(null)
+  const [isMasterData, setIsMasterData] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       setFileName(file.name)
+      const isText = file.name.toLowerCase().endsWith(".txt") || file.name.toLowerCase().endsWith(".md")
+      setIsMasterData(isText)
       onFileSelect(file)
     }
   }
@@ -27,7 +29,7 @@ export function ResumeUploadStep({ onFileSelect }: ResumeUploadStep) {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.docx,.doc"
+        accept=".pdf,.docx,.doc,.txt,.md"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -37,11 +39,17 @@ export function ResumeUploadStep({ onFileSelect }: ResumeUploadStep) {
             <File01Icon size={24} className="text-foreground" />
           </div>
           <p className="text-sm font-medium">{fileName}</p>
+          {isMasterData && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary border border-primary/20">
+              <span>⚡</span> Master Career Data detected — curating top experiences & skills
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
               setFileName(null)
+              setIsMasterData(false)
               if (fileInputRef.current) fileInputRef.current.value = ""
             }}
           >
@@ -52,17 +60,21 @@ export function ResumeUploadStep({ onFileSelect }: ResumeUploadStep) {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="flex w-full flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border p-8 transition-colors hover:border-muted-foreground/30 hover:bg-muted/50"
+          className="flex w-full flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border p-8 transition-colors hover:border-muted-foreground/30 hover:bg-muted/50 cursor-pointer"
         >
           <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
             <CloudUploadIcon size={24} className="text-muted-foreground" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-medium">Upload your resume</p>
-            <p className="text-xs text-muted-foreground">PDF or Word (.docx, .doc) up to 5MB</p>
+            <p className="text-sm font-medium">Upload resume or Master Data</p>
+            <p className="text-xs text-muted-foreground">PDF, Word (.docx), or plain text (.txt, .md) up to 5MB</p>
+          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground/80 bg-muted/40 px-3 py-1 rounded-full border border-border/40">
+            💡 Tip: Upload a master career notes dump (.txt) and we'll curate the top roles for your target JD
           </div>
         </button>
       )}
     </div>
   )
 }
+

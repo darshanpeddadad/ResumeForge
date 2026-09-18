@@ -187,12 +187,12 @@ export default function CoverLetterPage() {
             <CardContent>
               <form onSubmit={handleGenerate} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="resumeFile">Upload Resume (PDF or Word)</Label>
+                  <Label htmlFor="resumeFile">Upload Resume or Master Data (PDF, Word, TXT, MD)</Label>
                   <div className="flex items-center gap-3">
                     <input
                       id="resumeFile"
                       type="file"
-                      accept=".pdf,.docx,.doc"
+                      accept=".pdf,.docx,.doc,.txt,.md"
                       onChange={handleFileChange}
                       className="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-border file:bg-muted/50 file:text-sm file:font-medium hover:file:bg-accent cursor-pointer"
                     />
