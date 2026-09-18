@@ -8,6 +8,7 @@ import { File01Icon } from "@/components/ui/file-01";
 import { Login01Icon } from "@/components/ui/login-01";
 import { Logout01Icon } from "@/components/ui/logout-01";
 import { Settings01Icon } from "@/components/ui/settings-01";
+import { ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 export function Navbar() {
@@ -82,6 +83,20 @@ export function Navbar() {
 
         {session ? (
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              style={{
+                background: "rgba(201,169,110,0.1)",
+                border: "1px solid rgba(201,169,110,0.25)",
+                color: "#e8c97a",
+                fontSize: "0.8rem",
+              }}
+              onClick={() => (window.location.href = "/admin")}
+            >
+              <ShieldCheck size={13} className="mr-1.5 text-primary" />
+              Admin
+            </Button>
             <Button
               variant="outline"
               size="sm"

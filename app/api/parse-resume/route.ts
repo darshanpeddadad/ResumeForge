@@ -10,6 +10,7 @@ import { describeLlmError } from "@/lib/llm-errors";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
+import { recordGenerationLog } from "@/lib/admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,6 +60,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const startTime = performance.now();
+
     // parseResumeWithLLM generates the resume, embeds the 5 bullet archetypes,
     // applies target country ATS rules, and runs sanitizeAiPatterns in a single fast, unified pass.
     const result = await parseResumeWithLLM(
@@ -73,6 +76,17 @@ export async function POST(request: NextRequest) {
     if (!result || !result.resume) {
       throw new Error("Resume generation produced no output");
     }
+
+    const durationMs = performance.now() - startTime;
+    recordGenerationLog({
+      userId: session.user.id,
+      type: "resume",
+      targetCountry: typeof targetCountry === "string" ? targetCountry : "US",
+      provider,
+      model: modelId,
+      status: "success",
+      durationMs,
+    });
 
     const { resume, aiChanges } = result;
 
@@ -92,6 +106,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     safeLog.error("Parse resume error:", error);
     const info = describeLlmError(error);
+    recordGenerationLog({
+      type: "resume",
+      status: "error",
+      errorMessage: info.message,
+    });
     return NextResponse.json(
       {
         error: info.message,

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
@@ -9,6 +9,7 @@ import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import type { Resume } from "@/lib/schemas/resume";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
+import { recordGenerationLog } from "@/lib/admin";
 
 export const maxDuration = 120;
 
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const startTime = performance.now();
     const coverLetter = await generateCoverLetter(
       resume as Resume,
       jobDescription,
@@ -76,10 +78,25 @@ export async function POST(request: NextRequest) {
       safeLog.warn("Cover letter auto-humanize fallback:", hErr);
     }
 
+    const durationMs = performance.now() - startTime;
+    recordGenerationLog({
+      userId: session.user.id,
+      type: "cover_letter",
+      provider,
+      model: modelId,
+      status: "success",
+      durationMs,
+    });
+
     return NextResponse.json({ coverLetter });
   } catch (error) {
     safeLog.error("Cover letter generation failed:", error);
     const info = describeLlmError(error);
+    recordGenerationLog({
+      type: "cover_letter",
+      status: "error",
+      errorMessage: info.message,
+    });
     return NextResponse.json(
       {
         error: info.message,

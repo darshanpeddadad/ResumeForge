@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveAiSettings } from "@/lib/ai-settings";
 import { decrypt } from "@/lib/encryption";
@@ -11,6 +11,7 @@ import type { Resume } from "@/lib/schemas/resume";
 import type { ColdEmail, ColdDM } from "@/lib/schemas/outreach";
 import { checkAiGenerationRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { safeLog } from "@/lib/security";
+import { recordGenerationLog } from "@/lib/admin";
 
 export const maxDuration = 120;
 
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const startTime = performance.now();
     const outreach = await generateOutreach(
       resume as Resume,
       jobDescription,
@@ -87,6 +89,16 @@ export async function POST(request: NextRequest) {
       safeLog.warn("Outreach auto-humanize fallback:", hErr);
     }
 
+    const durationMs = performance.now() - startTime;
+    recordGenerationLog({
+      userId: session.user.id,
+      type: "outreach",
+      provider,
+      model: modelId,
+      status: "success",
+      durationMs,
+    });
+
     // Return rendered + humanized strings alongside structured data
     return NextResponse.json({
       outreach,
@@ -96,6 +108,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     safeLog.error("Generate outreach error:", error);
     const info = describeLlmError(error);
+    recordGenerationLog({
+      type: "outreach",
+      status: "error",
+      errorMessage: info.message,
+    });
     return NextResponse.json(
       {
         error: info.message,

@@ -14,6 +14,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  role: text("role").notNull().default("user"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -73,12 +74,28 @@ export const aiSettings = pgTable("ai_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ─── Generation Logs Audit ───
+
+export const generationLog = pgTable("generation_log", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  type: text("type").notNull(), // 'resume' | 'cover_letter' | 'outreach'
+  targetCountry: text("target_country"),
+  provider: text("provider"),
+  model: text("model"),
+  status: text("status").notNull(), // 'success' | 'error'
+  durationMs: text("duration_ms"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ─── Relations ───
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   aiSettings: many(aiSettings),
+  generationLogs: many(generationLog),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -98,6 +115,13 @@ export const accountRelations = relations(account, ({ one }) => ({
 export const aiSettingsRelations = relations(aiSettings, ({ one }) => ({
   user: one(user, {
     fields: [aiSettings.userId],
+    references: [user.id],
+  }),
+}));
+
+export const generationLogRelations = relations(generationLog, ({ one }) => ({
+  user: one(user, {
+    fields: [generationLog.userId],
     references: [user.id],
   }),
 }));
