@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ import {
   Users,
   Activity,
   ShieldAlert,
-  Sparkles,
   Globe,
   RefreshCw,
   CheckCircle2,
@@ -34,9 +33,7 @@ import {
   Zap,
   Server,
   Database,
-  ArrowUpRight,
   ShieldCheck,
-  UserCheck,
   Radio,
   Download,
   LogOut,
@@ -44,12 +41,9 @@ import {
   Smartphone,
   Monitor,
   Eye,
-  Flame,
   FileText,
   Mail,
   Send,
-  Calendar,
-  AlertTriangle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -581,6 +575,11 @@ export default function AdminDashboardPage() {
             >
               <RefreshCw className="size-3.5 mr-1.5" />
               Refresh
+              {isMounted && lastRefreshedAt && (
+                <span className="ml-1 text-[10px] text-muted-foreground hidden sm:inline">
+                  ({lastRefreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})
+                </span>
+              )}
             </Button>
           </div>
         </div>

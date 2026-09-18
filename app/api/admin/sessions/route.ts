@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminSession } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { session } from "@/lib/db/schema";
-import { eq, desc, gt } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { safeLog } from "@/lib/security";
 
 function parseUserAgent(ua?: string | null) {
