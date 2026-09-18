@@ -59,6 +59,17 @@ export function isPermanentAuthError(error: unknown): boolean {
  * If the active model experiences rate-limits (429), capacity errors (529/503), or model retirement (404),
  * it gracefully cascades to the next best model for that provider.
  */
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errorMsg)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+// Serverless execution budget per model attempt (5.5s) to guarantee response within 10s Vercel limit
+const ATTEMPT_TIMEOUT_MS = 5500;
+
 export async function executeWithModelFallback<T>(
   provider: Provider,
   apiKey: string,
@@ -70,7 +81,11 @@ export async function executeWithModelFallback<T>(
   const primaryInstance = getAiModel(provider, apiKey, primaryModel);
 
   try {
-    return await operation(primaryInstance, primaryModel);
+    return await withTimeout(
+      operation(primaryInstance, primaryModel),
+      ATTEMPT_TIMEOUT_MS,
+      `Model "${primaryModel}" timed out after ${ATTEMPT_TIMEOUT_MS}ms`
+    );
   } catch (primaryError) {
     if (isPermanentAuthError(primaryError)) {
       throw primaryError;
@@ -88,7 +103,11 @@ export async function executeWithModelFallback<T>(
       );
       try {
         const fallbackInstance = getAiModel(provider, apiKey, fbModel);
-        const result = await operation(fallbackInstance, fbModel);
+        const result = await withTimeout(
+          operation(fallbackInstance, fbModel),
+          ATTEMPT_TIMEOUT_MS,
+          `Fallback model "${fbModel}" timed out after ${ATTEMPT_TIMEOUT_MS}ms`
+        );
         safeLog.info(
           `[${taskName}] Successfully recovered using fallback model "${fbModel}" on ${provider}!`
         );

@@ -19,22 +19,22 @@ export const PROVIDER_MODELS: Record<Provider, ModelOption[]> = {
   ],
   google: [
     {
-      id: "gemini-3.6-flash",
-      label: "Gemini 3.6 Flash",
-      description: "Latest Flash generation, fast and reliable. Recommended.",
+      id: "gemini-3.5-flash",
+      label: "Gemini 3.5 Flash",
+      description: "Fastest response time, high throughput, and highest reliability. Recommended.",
     },
     {
       id: "gemini-3.5-flash-lite",
       label: "Gemini 3.5 Flash Lite",
-      description: "High speed lightweight model with high throughput.",
+      description: "Lightweight, high speed model with high availability.",
     },
     {
-      id: "gemini-3.5-flash",
-      label: "Gemini 3.5 Flash",
-      description: "Standard Flash model (subject to free-tier quota limits).",
+      id: "gemini-3.6-flash",
+      label: "Gemini 3.6 Flash",
+      description: "Standard Flash generation.",
     },
-    { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", description: "Latest Gemini 3.7 generation." },
-    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", description: "High intelligence Flash model." },
+    { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", description: "Gemini 3.7 Flash generation." },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", description: "High intelligence Flash model (subject to peak demand spikes)." },
   ],
   anthropic: [
     {
