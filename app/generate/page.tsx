@@ -65,6 +65,7 @@ export default function GeneratePage() {
   const [latexCode, setLatexCode] = useState<string | null>(null)
   const [resumeData, setResumeData] = useState<Resume | null>(null)
   const [highlights, setHighlights] = useState<Highlights | null>(null)
+  const [whyMatched, setWhyMatched] = useState<string[] | null>(null)
   const [coldEmail, setColdEmail] = useState<string | null>(null)
   const [coldDM, setColdDM] = useState<string | null>(null)
   const [coverLetter, setCoverLetter] = useState<CoverLetterResult | null>(null)
@@ -146,7 +147,7 @@ export default function GeneratePage() {
         throw new Error("Invalid response received from server. Please try again.");
       }
 
-      const { resume, highlights } = data;
+      const { resume, highlights, whyMatched: returnedWhyMatched } = data;
 
       // Hyperlink targets (e.g. annotations in PDF or raw text in DOCX)
       const contactLinks = await extractLinksFromFile(resumeFile)
@@ -160,6 +161,7 @@ export default function GeneratePage() {
 
       setResumeData(resume)
       setHighlights(highlights || null)
+      setWhyMatched(returnedWhyMatched || null)
 
       // Step 3: Generate LaTeX
       const latex = generateLatex(resume)
@@ -264,6 +266,7 @@ export default function GeneratePage() {
     setColdDM(null)
     setCoverLetter(null)
     setHighlights(null)
+    setWhyMatched(null)
   }, [])
 
   // Result view
@@ -298,6 +301,7 @@ export default function GeneratePage() {
             latexCode={latexCode}
             resumeData={resumeData}
             highlights={highlights}
+            whyMatched={whyMatched}
             onResumeChange={(updatedResume, updatedLatex) => {
               setResumeData(updatedResume)
               setLatexCode(updatedLatex)

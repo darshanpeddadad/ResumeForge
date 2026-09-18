@@ -123,6 +123,7 @@ export const aiChangesSchema = z.object({
 export const parseResultLlmSchema = z.object({
   resume: resumeLlmSchema,
   aiChanges: aiChangesSchema.optional(),
+  whyMatched: z.array(z.string()).optional().default([]).describe("3-5 bullet points briefly explaining why specific roles, projects, metrics, and skills were selected and curated from the candidate's background to match the target JD and regional standards"),
 });
 
 export type AiChanges = z.infer<typeof aiChangesSchema>;

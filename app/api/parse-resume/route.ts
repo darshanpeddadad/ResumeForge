@@ -83,7 +83,12 @@ export async function POST(request: NextRequest) {
       jobDescription || undefined
     );
 
-    return NextResponse.json({ resume, aiChanges, highlights });
+    return NextResponse.json({
+      resume,
+      aiChanges,
+      highlights,
+      whyMatched: result.whyMatched || [],
+    });
   } catch (error) {
     safeLog.error("Parse resume error:", error);
     const info = describeLlmError(error);

@@ -177,9 +177,15 @@ OPTIMAL ATS SECTION ORDER (when JD provided)
 5. Education
 6. Certifications (if present in source)
 7. Awards & Honors (if present in source)
-8. Additional sections (Publications, Leadership, etc.)
+═══════════════════════════════════════════════════════
+STRATEGIC ALIGNMENT RATIONALE ("whyMatched")
+═══════════════════════════════════════════════════════
+Always provide 3-5 concise, high-impact bullet points in "whyMatched" explaining why these points were selected:
+• Explain which career experiences, scale milestones, and Google XYZ metrics were prioritized for the target role.
+• Explain which top projects were curated to prove hands-on proficiency with the required tech stack.
+• Explain how technical skills and certifications were structured to maximize ATS keyword scoring for this role and country.
 
-(Without JD: preserve original logical resume flow)
+(Without JD: explain the strategic curation of top accomplishments, roles, and skills from the source text).
 `;
 
 import { getCountryProfile } from "@/lib/country-profiles";
@@ -194,6 +200,7 @@ function sanitizeText(str: string): string {
 export interface ParseResult {
   resume: Resume;
   aiChanges: ParseResultLlm["aiChanges"];
+  whyMatched: string[];
 }
 
 export async function parseResumeWithLLM(
@@ -266,5 +273,6 @@ MANDATORY COUNTRY DIRECTIVES:
       addedListItems: [],
       addedSections: [],
     },
+    whyMatched: (llmResult.whyMatched || []).map(sanitizeAiPatterns),
   };
 }

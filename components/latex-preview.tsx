@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { pdf } from "@react-pdf/renderer";
@@ -10,7 +10,7 @@ import { CloudDownloadIcon } from "@/components/ui/cloud-download";
 import { Copy01Icon } from "@/components/ui/copy-01";
 import { CircleCheckIcon } from "@/components/ui/circle-check";
 import { RefreshIcon } from "@/components/ui/refresh";
-import { FileText } from "lucide-react";
+import { FileText, Sparkles } from "lucide-react";
 import { ResumePreview } from "@/components/resume-preview";
 import { ResumeEditor } from "@/components/resume-editor";
 import { PdfResume } from "@/components/pdf-resume";
@@ -23,6 +23,7 @@ interface LaTeXPreviewProps {
   latexCode: string;
   resumeData: Resume;
   highlights?: Highlights | null;
+  whyMatched?: string[] | null;
   onResumeChange?: (updated: Resume, updatedLatex: string) => void;
 }
 
@@ -30,6 +31,7 @@ export function LaTeXPreview({
   latexCode: initialLatexCode,
   resumeData: initialResumeData,
   highlights,
+  whyMatched,
   onResumeChange,
 }: LaTeXPreviewProps) {
   const [currentResume, setCurrentResume] = useState<Resume>(initialResumeData);
@@ -37,6 +39,7 @@ export function LaTeXPreview({
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
+  const [showRationale, setShowRationale] = useState(false);
 
   // Sync if parent updates
   const resumeData = currentResume;
@@ -191,6 +194,43 @@ export function LaTeXPreview({
             </ScrollArea>
           </TabsContent>
         </Tabs>
+
+        {whyMatched && whyMatched.length > 0 && (
+          <div className="pt-3 border-t border-border/40 mt-4 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground pt-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-3.5 text-primary shrink-0" />
+                <span className="font-medium text-foreground">Strategic Resume Curation</span>
+                <span>·</span>
+                <span>Tailored for Target Market</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs font-medium hover:bg-primary/10 hover:text-primary"
+                onClick={() => setShowRationale(!showRationale)}
+              >
+                {showRationale ? "Hide alignment details" : "Why these points were selected"}
+              </Button>
+            </div>
+
+            {showRationale && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2 animate-in fade-in-50">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  Strategic Alignment with Job Description & Market Standards
+                </p>
+                <ul className="space-y-1.5 text-xs text-foreground">
+                  {whyMatched.map((reason, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-primary font-bold">→</span>
+                      <span>{reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
