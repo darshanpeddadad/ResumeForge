@@ -73,7 +73,7 @@ export type TextSection = ResumeSection & { type: "text" };
 
 export const resumeLlmSchema = z.object({
   contact: contactSchema,
-  summary: z.string().optional().default("").describe("Professional 2-3 sentence technical summary tailored to the target role"),
+  summary: z.string().describe("MANDATORY: 2-3 sentence technical Professional Summary synthesizing candidate identity, years of experience, core technical stack, and quantifiable value proposition tailored to the target role and country expectations"),
   skills: z.array(skillCategorySchema).describe("Consolidated technical skill categories (Languages, Cloud & DevOps, Frameworks, Databases, Developer Tools)"),
   experience: z.array(bulletEntrySchema).describe("Work experience roles with Google XYZ achievement bullets"),
   education: z.array(bulletEntrySchema).describe("Degrees, universities, dates, GPA/honors"),

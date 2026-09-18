@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const modelId = settings.model || DEFAULT_MODEL[provider];
 
     const body = await request.json();
-    const { resumeText, jobDescription } = body;
+    const { resumeText, jobDescription, targetCountry } = body;
 
     if (!resumeText || typeof resumeText !== "string") {
       return NextResponse.json(
@@ -60,13 +60,14 @@ export async function POST(request: NextRequest) {
     }
 
     // parseResumeWithLLM generates the resume, embeds the 5 bullet archetypes,
-    // and runs sanitizeAiPatterns in a single fast, unified pass.
+    // applies target country ATS rules, and runs sanitizeAiPatterns in a single fast, unified pass.
     const result = await parseResumeWithLLM(
       resumeText,
       jobDescription || undefined,
       provider,
       apiKey,
-      modelId
+      modelId,
+      typeof targetCountry === "string" ? targetCountry : "US"
     );
 
     if (!result || !result.resume) {

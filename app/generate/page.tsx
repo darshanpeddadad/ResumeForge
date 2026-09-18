@@ -58,6 +58,7 @@ export default function GeneratePage() {
   const router = useRouter()
   const isSignedIn = !!session
   const [currentStep, setCurrentStep] = useState(1)
+  const [targetCountry, setTargetCountry] = useState("US")
   const [jd, setJd] = useState("")
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -73,9 +74,9 @@ export default function GeneratePage() {
 
   const effectiveStep = isSignedIn ? Math.max(currentStep, 2) : currentStep
 
-    useEffect(() => {
+  useEffect(() => {
     if (!isPending && !session) {
-      router.replace("/sign-in?callbackUrl=/generate")
+      router.push("/sign-in?redirect=/generate")
     }
   }, [session, isPending, router])
 
@@ -111,6 +112,7 @@ export default function GeneratePage() {
         body: JSON.stringify({
           resumeText,
           jobDescription: jd || undefined,
+          targetCountry,
         }),
       })
 
@@ -407,7 +409,12 @@ export default function GeneratePage() {
 
               <StepperContent value={3}>
                 <CardContent>
-                  <JDInputStep value={jd} onChange={setJd} />
+                  <JDInputStep
+                    value={jd}
+                    onChange={setJd}
+                    targetCountry={targetCountry}
+                    onCountryChange={setTargetCountry}
+                  />
                 </CardContent>
               </StepperContent>
             </StepperPanel>

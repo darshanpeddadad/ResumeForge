@@ -103,9 +103,9 @@ You are strictly FORBIDDEN from omitting any category of achievement that exists
     - Array of keys in optimal ATS order, e.g.:
       ["summary", "skills", "experience", "projects", "education", "certifications", "awards"]
 
-11. PROFESSIONAL SUMMARY (populate "summary"):
-    - A punchy 2-3 sentence technical overview tailored to the target JD role.
-    - Focus on candidate's core engineering strengths, domain focus, and value.
+11. PROFESSIONAL SUMMARY (populate "summary" - MANDATORY FOR ALL RESUMES):
+    - MANDATORY: Always generate a compelling 2-3 sentence technical Professional Summary at the top (index 0).
+    - Synthesize the candidate's core engineering strengths, primary stack, and quantifiable value tailored to the target JD and target country ATS standards.
     - STRICTLY PROFESSIONAL: DO NOT use informal parentheticals like "(honestly)" or conversational asides.
 
 ═══════════════════════════════════════════════════════
@@ -182,6 +182,8 @@ OPTIMAL ATS SECTION ORDER (when JD provided)
 (Without JD: preserve original logical resume flow)
 `;
 
+import { getCountryProfile } from "@/lib/country-profiles";
+
 function sanitizeText(str: string): string {
   return str
     .replace(/[\u2018\u2019]/g, "'")
@@ -199,16 +201,28 @@ export async function parseResumeWithLLM(
   jobDescription?: string,
   provider: Provider = "google",
   apiKey?: string,
-  modelId?: string
+  modelId?: string,
+  targetCountry: string = "US"
 ): Promise<ParseResult> {
   const cleanResume = sanitizeText(resumeText);
   const cleanJD = jobDescription ? sanitizeText(jobDescription) : undefined;
+  const countryProfile = getCountryProfile(targetCountry);
+
+  const countrySection = `═══════════════════════════════════════════════════════
+TARGET COUNTRY ATS SPECIFICATION (${countryProfile.name} - ${countryProfile.code})
+═══════════════════════════════════════════════════════
+${countryProfile.atsGuidelines}
+
+MANDATORY COUNTRY DIRECTIVES:
+• PROFESSIONAL SUMMARY IS MANDATORY: You MUST generate a sharp, compelling 2-3 sentence technical Professional Summary at the top (index 0) synthesizing the candidate's core strengths, technical identity, and relevance to the target JD/country.
+• Orthography & Conventions: Follow ${countryProfile.name} ATS conventions (spelling, section terminology, anti-bias rules).
+• Length Budget: Strictly 1 to 2 pages (never exceed 2 pages).
+• Google XYZ Formula: Accomplished [X], as measured by [Y], by doing [Z].
+• ZERO-OMISSION: Never drop Certifications, Awards, Education, or Projects if present in the source.`;
 
   const userMessage = cleanJD
-    ? `SOURCE RESUME / MASTER DATA TEXT:\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nTARGET JOB DESCRIPTION:\n\n${cleanJD}\n\n═══════════════════════════════════════════════════════\nCRITICAL DIRECTIVES:\n1. Flexible 1 or 2 pages (strict hard limit: maximum 2 pages).\n2. Format bullets with Google XYZ Formula: Accomplished [X], as measured by [Y], by doing [Z].\n3. MANDATORY CREDENTIALS INGESTION: If any Certifications, Licenses, Awards, Honors, Hackathons, or Publications appear anywhere in the source text, you MUST dynamically create dedicated sections for them ("Certifications", "Awards & Honors"). DO NOT omit them.`
-    : `SOURCE RESUME / MASTER DATA TEXT:\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nCRITICAL DIRECTIVES:\n1. Flexible 1 or 2 pages (strict hard limit: maximum 2 pages).\n2. Format bullets with Google XYZ Formula: Accomplished [X], as measured by [Y], by doing [Z].\n3. MANDATORY CREDENTIALS INGESTION: If any Certifications, Licenses, Awards, Honors, Hackathons, or Publications appear anywhere in the source text, you MUST dynamically create dedicated sections for them ("Certifications", "Awards & Honors"). DO NOT omit them.`;
-
-
+    ? `SOURCE RESUME / MASTER DATA TEXT:\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nTARGET JOB DESCRIPTION:\n\n${cleanJD}\n\n${countrySection}`
+    : `SOURCE RESUME / MASTER DATA TEXT:\n\n${cleanResume}\n\n${countrySection}`;
 
   const llmResult = await executeWithModelFallback(
     provider,
