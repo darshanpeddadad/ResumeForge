@@ -193,15 +193,26 @@ function SectionBlock({
 
     case "simple_list": {
       if (!section.items || section.items.length === 0) return null;
+      const isDescriptive = section.items.some((item) => item.length > 25);
       return (
         <Section title={section.title} titleStyle={titleStyle}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "2px 8px", fontSize: "10px" }}>
-            {section.items.map((item, i) => (
-              <span key={i} style={addedListItems.has(item) ? ADDED_CHIP_STYLE : undefined}>
-                {item}
-              </span>
-            ))}
-          </div>
+          {isDescriptive ? (
+            <ul style={{ listStyleType: "disc", marginLeft: "16px", marginTop: "2px", fontSize: "10px" }}>
+              {section.items.map((item, i) => (
+                <li key={i} style={{ marginBottom: "2px", ...(addedListItems.has(item) ? ADDED_CHIP_STYLE : {}) }}>
+                  <RichText text={item} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2px 8px", fontSize: "10px" }}>
+              {section.items.map((item, i) => (
+                <span key={i} style={addedListItems.has(item) ? ADDED_CHIP_STYLE : undefined}>
+                  <RichText text={item} />
+                </span>
+              ))}
+            </div>
+          )}
         </Section>
       );
     }

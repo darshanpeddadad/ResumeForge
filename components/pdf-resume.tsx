@@ -254,16 +254,25 @@ function PdfSection({ section }: { section: ResumeSection }) {
 
     case "simple_list": {
       if (!section.items || section.items.length === 0) return null;
+      const isDescriptive = section.items.some((item) => item.length > 25);
       return (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
-          <View style={styles.coursework}>
-            {section.items.map((item, i) => (
-              <Text key={i} style={styles.courseworkItem}>
-                {item}
-              </Text>
-            ))}
-          </View>
+          {isDescriptive ? (
+            <View style={styles.bullets}>
+              {section.items.map((item, i) => (
+                <Bullet key={i} text={item} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.coursework}>
+              {section.items.map((item, i) => (
+                <Text key={i} style={styles.courseworkItem}>
+                  {item}
+                </Text>
+              ))}
+            </View>
+          )}
         </View>
       );
     }

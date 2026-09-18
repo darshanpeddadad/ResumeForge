@@ -186,19 +186,28 @@ function renderSimpleListSection(title: string, items: string[]): string {
   if (!items || items.length === 0) return "";
 
   const lines: string[] = [];
+  const isDescriptive = items.some((item) => item.length > 25);
 
   lines.push(`%------${title.toUpperCase().replace(/ /g, "-")}-------`);
   lines.push(`\\section{${escapeLatex(title)}}`);
-  lines.push("        \\begin{multicols}{4}");
-  lines.push("            \\begin{itemize}[itemsep=-5pt, parsep=3pt]");
 
-  for (const item of items) {
-    lines.push("                \\item\\small " + escapeLatex(item));
+  if (isDescriptive) {
+    lines.push("    \\begin{itemize}[itemsep=-3pt, parsep=2pt, leftmargin=12pt]");
+    for (const item of items) {
+      lines.push("        \\item\\small " + escapeLatex(item));
+    }
+    lines.push("    \\end{itemize}");
+    lines.push("    \\vspace{-5pt}");
+  } else {
+    lines.push("        \\begin{multicols}{3}");
+    lines.push("            \\begin{itemize}[itemsep=-5pt, parsep=3pt]");
+    for (const item of items) {
+      lines.push("                \\item\\small " + escapeLatex(item));
+    }
+    lines.push("            \\end{itemize}");
+    lines.push("        \\end{multicols}");
+    lines.push("        \\vspace*{2.0\\multicolsep}");
   }
-
-  lines.push("            \\end{itemize}");
-  lines.push("        \\end{multicols}");
-  lines.push("        \\vspace*{2.0\\multicolsep}");
 
   return lines.join("\n");
 }

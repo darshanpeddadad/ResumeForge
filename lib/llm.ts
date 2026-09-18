@@ -39,6 +39,16 @@ Determine whether the input is a standard resume or a comprehensive master data 
   4. SKILLS HARVESTING:
      - Harvest all relevant technologies, languages, cloud platforms, frameworks, and databases mentioned ANYWHERE across the master data notes and organize them into the single "Technical Skills" section.
 
+  5. AWARDS, CERTIFICATIONS & HONORS (MANDATORY WHEN PRESENT):
+     - Scan the master data for ALL:
+       • Certifications, licenses, and professional credentials (e.g. AWS, GCP, Azure, CKA, Terraform, Cisco).
+       • Awards, honors, hackathons, scholarships, Dean's List, and recognitions.
+       • Publications, patents, or notable open source contributions.
+     - YOU MUST DYNAMICALLY CREATE DEDICATED SECTIONS FOR THEM!
+       • "Certifications" (type: "simple_list" with items: [ "Cert Name (Issuer, Year)", ... ])
+       • "Awards & Honors" (type: "simple_list" with items: [ "Award Name – Detail/Year", ... ])
+     - NEVER DROP OR IGNORE AWARDS AND CERTIFICATIONS: They are high-leverage competitive differentiators that recruiters and ATS systems specifically look for. Because they require minimal vertical space, they ALWAYS fit within the 1-2 page budget.
+
 ═══════════════════════════════════════════════════════
 CORE SECTION SPECIFICATIONS
 ═══════════════════════════════════════════════════════
@@ -76,16 +86,25 @@ CORE SECTION SPECIFICATIONS
      • Developer Tools: e.g. Git, Helm, Prometheus, Grafana
    - When a JD is provided, incorporate matching skills from the JD that align with the candidate's actual background.
 
-5. PROFESSIONAL SUMMARY (type: "text", optional/recommended):
+5. CERTIFICATIONS (type: "simple_list"):
+   - DYNAMICALLY CREATE when any certificates, cloud certifications, or credentials are in the source text.
+   - title: "Certifications"
+   - items: flat list of strings, e.g. ["AWS Certified Solutions Architect – Associate (2024)", "Certified Kubernetes Administrator (CKA, Linux Foundation)"]
+
+6. AWARDS & HONORS (type: "simple_list"):
+   - DYNAMICALLY CREATE when any awards, honors, hackathons, or scholarships are in the source text.
+   - title: "Awards & Honors" (or "Honors & Achievements")
+   - items: flat list of strings, e.g. ["1st Place, National AI Hackathon 2024 (out of 400 teams)", "Dean's List for Academic Excellence (2022 – 2024)"]
+
+7. PROFESSIONAL SUMMARY (type: "text", optional/recommended):
    - A punchy 2-3 sentence technical overview tailored to the target JD role.
    - Focus on candidate's core engineering strengths, domain focus, and value.
    - STRICTLY PROFESSIONAL: DO NOT use informal parentheticals like "(honestly)" or conversational asides.
 
-6. OTHER SECTIONS (if present and fits within 2-page limit):
-   - Certifications (type: "simple_list" or "skills")
+8. OTHER DYNAMIC SECTIONS (if present):
    - Leadership & Extracurriculars (type: "bullet_list")
-   - Publications or Research (type: "projects" or "bullet_list")
-   - Awards or Honors (type: "simple_list")
+   - Publications & Research (type: "projects" or "simple_list")
+   - Patents (type: "simple_list")
 
 ═══════════════════════════════════════════════════════
 GOOGLE XYZ FORMULA + THE 5 ENGINEERING BULLET ARCHETYPES
@@ -154,7 +173,9 @@ OPTIMAL ATS SECTION ORDER (when JD provided)
 3. Work Experience
 4. Projects
 5. Education
-6. Certifications / Additional sections
+6. Certifications (if present in source)
+7. Awards & Honors (if present in source)
+8. Additional sections (Publications, Leadership, etc.)
 
 (Without JD: preserve original logical resume flow)
 `;
@@ -182,8 +203,9 @@ export async function parseResumeWithLLM(
   const cleanJD = jobDescription ? sanitizeText(jobDescription) : undefined;
 
   const userMessage = cleanJD
-    ? `SOURCE RESUME / MASTER DATA TEXT (Extract or curate top jobs, degrees, projects, and skills from this document):\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nTARGET JOB DESCRIPTION (Score relevance, tailor keywords, highlight matching skills, enforce flexible 1-2 page budget, max 2 pages):\n\n${cleanJD}`
-    : `SOURCE RESUME / MASTER DATA TEXT (Extract or curate top jobs, degrees, projects, and skills from this document):\n\n${cleanResume}`;
+    ? `SOURCE RESUME / MASTER DATA TEXT:\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nTARGET JOB DESCRIPTION:\n\n${cleanJD}\n\n═══════════════════════════════════════════════════════\nCRITICAL DIRECTIVES:\n1. Flexible 1 or 2 pages (strict hard limit: maximum 2 pages).\n2. Format bullets with Google XYZ Formula: Accomplished [X], as measured by [Y], by doing [Z].\n3. MANDATORY CREDENTIALS INGESTION: If any Certifications, Licenses, Awards, Honors, Hackathons, or Publications appear anywhere in the source text, you MUST dynamically create dedicated sections for them ("Certifications", "Awards & Honors"). DO NOT omit them.`
+    : `SOURCE RESUME / MASTER DATA TEXT:\n\n${cleanResume}\n\n═══════════════════════════════════════════════════════\nCRITICAL DIRECTIVES:\n1. Flexible 1 or 2 pages (strict hard limit: maximum 2 pages).\n2. Format bullets with Google XYZ Formula: Accomplished [X], as measured by [Y], by doing [Z].\n3. MANDATORY CREDENTIALS INGESTION: If any Certifications, Licenses, Awards, Honors, Hackathons, or Publications appear anywhere in the source text, you MUST dynamically create dedicated sections for them ("Certifications", "Awards & Honors"). DO NOT omit them.`;
+
 
 
   const llmResult = await executeWithModelFallback(

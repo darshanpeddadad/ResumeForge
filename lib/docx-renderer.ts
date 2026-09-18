@@ -187,6 +187,20 @@ function renderSkillsDocx(
 
 function renderSimpleListDocx(title: string, items: string[]): Paragraph[] {
   if (!items || items.length === 0) return [];
+  const isDescriptive = items.some((item) => item.length > 25);
+  if (isDescriptive) {
+    const paragraphs: Paragraph[] = [createSectionHeading(title)];
+    for (const item of items) {
+      paragraphs.push(
+        new Paragraph({
+          bullet: { level: 0 },
+          spacing: { before: 20, after: 20 },
+          children: parseFormattedRuns(item, { size: 20 }),
+        })
+      );
+    }
+    return paragraphs;
+  }
   return [
     createSectionHeading(title),
     new Paragraph({
