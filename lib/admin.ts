@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { user, generationLog } from "@/lib/db/schema";
+import { user, account, generationLog } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeLog } from "@/lib/security";
@@ -63,17 +63,44 @@ export async function ensureAdminUserExists(): Promise<void> {
       .limit(1);
 
     if (existing.length === 0) {
-      await auth.api.signUpEmail({
-        body: {
-          email: adminEmail,
-          password: adminPassword,
-          name: "Administrator",
-        },
-      });
-      await db.update(user).set({ role: "admin" }).where(eq(user.email, adminEmail));
-      safeLog.info(`Provisioned admin account: ${adminEmail}`);
-    } else if (existing[0].role !== "admin") {
-      await db.update(user).set({ role: "admin" }).where(eq(user.email, adminEmail));
+      try {
+        await auth.api.signUpEmail({
+          body: {
+            email: adminEmail,
+            password: adminPassword,
+            name: "Administrator",
+          },
+        });
+        await db.update(user).set({ role: "admin" }).where(eq(user.email, adminEmail));
+        safeLog.info(`Provisioned admin account: ${adminEmail}`);
+      } catch (signupErr) {
+        safeLog.warn("Auto-signup admin notice:", signupErr);
+      }
+    } else {
+      if (existing[0].role !== "admin") {
+        await db.update(user).set({ role: "admin" }).where(eq(user.email, adminEmail));
+      }
+      const existingAccount = await db
+        .select({ id: account.id })
+        .from(account)
+        .where(eq(account.userId, existing[0].id))
+        .limit(1);
+
+      if (existingAccount.length === 0) {
+        try {
+          await db.delete(user).where(eq(user.id, existing[0].id));
+          await auth.api.signUpEmail({
+            body: {
+              email: adminEmail,
+              password: adminPassword,
+              name: "Administrator",
+            },
+          });
+          await db.update(user).set({ role: "admin" }).where(eq(user.email, adminEmail));
+        } catch (recreateErr) {
+          safeLog.warn("Recreate admin notice:", recreateErr);
+        }
+      }
     }
     hasEnsuredAdmin = true;
   } catch (err) {
