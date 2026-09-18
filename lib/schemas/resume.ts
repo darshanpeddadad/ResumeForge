@@ -73,7 +73,21 @@ export type TextSection = ResumeSection & { type: "text" };
 
 export const resumeLlmSchema = z.object({
   contact: contactSchema,
-  sections: z.array(resumeSectionSchema).describe("Ordered list of resume sections"),
+  summary: z.string().optional().default("").describe("Professional 2-3 sentence technical summary tailored to the target role"),
+  skills: z.array(skillCategorySchema).describe("Consolidated technical skill categories (Languages, Cloud & DevOps, Frameworks, Databases, Developer Tools)"),
+  experience: z.array(bulletEntrySchema).describe("Work experience roles with Google XYZ achievement bullets"),
+  education: z.array(bulletEntrySchema).describe("Degrees, universities, dates, GPA/honors"),
+  projects: z.array(bulletEntrySchema).describe("Notable projects with tech stack and achievement bullets"),
+  certifications: z.array(z.string()).optional().default([]).describe("ALL certifications, licenses, and professional credentials (e.g. AWS, CKA, GCP, Azure, Cisco). NEVER omit if present in source text."),
+  awards: z.array(z.string()).optional().default([]).describe("ALL awards, honors, hackathons, scholarships, Dean's List, recognitions. NEVER omit if present in source text."),
+  publications: z.array(bulletEntrySchema).optional().default([]).describe("Publications, research papers, or patents if present in source text"),
+  volunteerLeadership: z.array(bulletEntrySchema).optional().default([]).describe("Leadership, volunteering, open-source maintainer, or extracurricular roles"),
+  additionalSections: z.array(z.object({
+    title: z.string().describe("Section heading e.g. Languages, Speaking, Interests"),
+    items: z.array(z.string()).describe("List of items in this section"),
+  })).optional().default([]).describe("Any other sections present in source text"),
+  sectionOrder: z.array(z.string()).optional().default([]).describe("ATS section ordering for populated sections, e.g. ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'awards']"),
+  sections: z.array(resumeSectionSchema).optional().default([]).describe("Fallback section list for backward compatibility"),
 });
 
 export const resumeSchema = z.object({
@@ -118,61 +132,254 @@ export type ParseResultLlm = z.infer<typeof parseResultLlmSchema>;
 
 /**
  * Normalizes sections from LLM output:
- * - Generates stable nanoid for every section
- * - Consolidates duplicate skill sections into one single section
- * - Ensures arrays/strings exist
- * - Ensures skills in `items` are moved to `categories` if needed
+ * - Maps semantic anchors (experience, skills, certifications, awards, etc.) into structured ResumeSections
+ * - Guarantees ZERO MISSED SECTIONS from candidate data
+ * - Respects ATS sectionOrder
  */
 export function hydrateSectionIds(llmResume: z.infer<typeof resumeLlmSchema>): Resume {
-  const sections: ResumeSection[] = [];
-  let consolidatedSkills: ResumeSection | null = null;
+  // Backward compatibility fallback if LLM returned generic sections array only
+  if (
+    llmResume.sections &&
+    llmResume.sections.length > 0 &&
+    (!llmResume.experience || llmResume.experience.length === 0)
+  ) {
+    const sections: ResumeSection[] = [];
+    for (const rawSec of llmResume.sections) {
+      if (!rawSec.title) continue;
+      sections.push({
+        id: rawSec.id || nanoid(),
+        title: rawSec.title.trim(),
+        type: rawSec.type || "bullet_list",
+        content: rawSec.content || "",
+        categories: (rawSec.categories || []).filter((c) => c && c.items && c.items.length > 0),
+        items: rawSec.items || [],
+        entries: (rawSec.entries || []).map((entry) => ({
+          heading: entry.heading || "",
+          subheading: entry.subheading || "",
+          dateRange: entry.dateRange || "",
+          location: entry.location || "",
+          bullets: entry.bullets || [],
+        })),
+      });
+    }
+    return {
+      contact: {
+        name: llmResume.contact?.name || "Your Name",
+        address: llmResume.contact?.address || "",
+        phone: llmResume.contact?.phone || "",
+        email: llmResume.contact?.email || "",
+        linkedin: llmResume.contact?.linkedin || "",
+        github: llmResume.contact?.github || "",
+      },
+      sections,
+    };
+  }
 
-  for (const rawSec of llmResume.sections || []) {
-    if (!rawSec.title) continue;
+  // ─── Semantic Anchors to ResumeSection mapping (Guaranteed Zero-Omission) ───
+  const sectionMap: Record<string, ResumeSection> = {};
 
-    const sec: ResumeSection = {
-      id: rawSec.id || nanoid(),
-      title: rawSec.title.trim(),
-      type: rawSec.type || "bullet_list",
-      content: rawSec.content || "",
-      categories: (rawSec.categories || []).filter((c) => c && c.items && c.items.length > 0),
-      items: rawSec.items || [],
-      entries: (rawSec.entries || []).map((entry) => ({
-        heading: entry.heading || "",
-        subheading: entry.subheading || "",
-        dateRange: entry.dateRange || "",
-        location: entry.location || "",
-        bullets: entry.bullets || [],
+  if (llmResume.summary && llmResume.summary.trim()) {
+    sectionMap["summary"] = {
+      id: nanoid(),
+      title: "Professional Summary",
+      type: "text",
+      content: llmResume.summary.trim(),
+      categories: [],
+      items: [],
+      entries: [],
+    };
+  }
+
+  if (llmResume.skills && llmResume.skills.length > 0) {
+    const validSkills = llmResume.skills.filter((c) => c && c.items && c.items.length > 0);
+    if (validSkills.length > 0) {
+      sectionMap["skills"] = {
+        id: nanoid(),
+        title: "Technical Skills",
+        type: "skills",
+        content: "",
+        categories: validSkills,
+        items: [],
+        entries: [],
+      };
+    }
+  }
+
+  if (llmResume.experience && llmResume.experience.length > 0) {
+    sectionMap["experience"] = {
+      id: nanoid(),
+      title: "Work Experience",
+      type: "bullet_list",
+      content: "",
+      categories: [],
+      items: [],
+      entries: llmResume.experience.map((e) => ({
+        heading: e.heading || "",
+        subheading: e.subheading || "",
+        dateRange: e.dateRange || "",
+        location: e.location || "",
+        bullets: e.bullets || [],
       })),
     };
+  }
 
-    // If section is skills, ensure categories exist
-    if (sec.type === "skills") {
-      if (sec.categories.length === 0 && sec.items.length > 0) {
-        sec.categories = [{ label: "Skills", items: [...sec.items] }];
-      }
-      // If we already have a skills section, merge this into the existing one
-      if (consolidatedSkills) {
-        for (const cat of sec.categories) {
-          const existingCat = consolidatedSkills.categories.find(
-            (c) => c.label.toLowerCase() === cat.label.toLowerCase()
-          );
-          if (existingCat) {
-            const set = new Set([...existingCat.items, ...cat.items]);
-            existingCat.items = [...set];
-          } else {
-            consolidatedSkills.categories.push(cat);
-          }
-        }
-        continue;
-      } else {
-        consolidatedSkills = sec;
-        sections.push(sec);
-        continue;
-      }
+  if (llmResume.projects && llmResume.projects.length > 0) {
+    sectionMap["projects"] = {
+      id: nanoid(),
+      title: "Projects",
+      type: "projects",
+      content: "",
+      categories: [],
+      items: [],
+      entries: llmResume.projects.map((e) => ({
+        heading: e.heading || "",
+        subheading: e.subheading || "",
+        dateRange: e.dateRange || "",
+        location: e.location || "",
+        bullets: e.bullets || [],
+      })),
+    };
+  }
+
+  if (llmResume.education && llmResume.education.length > 0) {
+    sectionMap["education"] = {
+      id: nanoid(),
+      title: "Education",
+      type: "bullet_list",
+      content: "",
+      categories: [],
+      items: [],
+      entries: llmResume.education.map((e) => ({
+        heading: e.heading || "",
+        subheading: e.subheading || "",
+        dateRange: e.dateRange || "",
+        location: e.location || "",
+        bullets: e.bullets || [],
+      })),
+    };
+  }
+
+  if (llmResume.certifications && llmResume.certifications.length > 0) {
+    const validCerts = llmResume.certifications.filter((c) => c && c.trim().length > 0);
+    if (validCerts.length > 0) {
+      sectionMap["certifications"] = {
+        id: nanoid(),
+        title: "Certifications",
+        type: "simple_list",
+        content: "",
+        categories: [],
+        items: validCerts,
+        entries: [],
+      };
     }
+  }
 
-    sections.push(sec);
+  if (llmResume.awards && llmResume.awards.length > 0) {
+    const validAwards = llmResume.awards.filter((a) => a && a.trim().length > 0);
+    if (validAwards.length > 0) {
+      sectionMap["awards"] = {
+        id: nanoid(),
+        title: "Awards & Honors",
+        type: "simple_list",
+        content: "",
+        categories: [],
+        items: validAwards,
+        entries: [],
+      };
+    }
+  }
+
+  if (llmResume.publications && llmResume.publications.length > 0) {
+    sectionMap["publications"] = {
+      id: nanoid(),
+      title: "Publications & Research",
+      type: "projects",
+      content: "",
+      categories: [],
+      items: [],
+      entries: llmResume.publications.map((e) => ({
+        heading: e.heading || "",
+        subheading: e.subheading || "",
+        dateRange: e.dateRange || "",
+        location: e.location || "",
+        bullets: e.bullets || [],
+      })),
+    };
+  }
+
+  if (llmResume.volunteerLeadership && llmResume.volunteerLeadership.length > 0) {
+    sectionMap["leadership"] = {
+      id: nanoid(),
+      title: "Leadership & Volunteering",
+      type: "bullet_list",
+      content: "",
+      categories: [],
+      items: [],
+      entries: llmResume.volunteerLeadership.map((e) => ({
+        heading: e.heading || "",
+        subheading: e.subheading || "",
+        dateRange: e.dateRange || "",
+        location: e.location || "",
+        bullets: e.bullets || [],
+      })),
+    };
+  }
+
+  // Handle custom additional sections from source
+  const customSections: ResumeSection[] = (llmResume.additionalSections || [])
+    .filter((s) => s.title && s.items && s.items.length > 0)
+    .map((s) => ({
+      id: nanoid(),
+      title: s.title.trim(),
+      type: "simple_list" as const,
+      content: "",
+      categories: [],
+      items: s.items,
+      entries: [],
+    }));
+
+  // Build final ordered list according to sectionOrder (or default ATS order)
+  const defaultOrder = [
+    "summary",
+    "skills",
+    "experience",
+    "projects",
+    "education",
+    "certifications",
+    "awards",
+    "publications",
+    "leadership",
+  ];
+
+  const order = (llmResume.sectionOrder && llmResume.sectionOrder.length > 0)
+    ? llmResume.sectionOrder
+    : defaultOrder;
+
+  const sections: ResumeSection[] = [];
+  const placed = new Set<string>();
+
+  for (const key of order) {
+    const normKey = key.toLowerCase().replace(/[^a-z]/g, "");
+    const mapKey = Object.keys(sectionMap).find((k) =>
+      normKey.includes(k) || k.includes(normKey)
+    );
+    if (mapKey && sectionMap[mapKey] && !placed.has(mapKey)) {
+      sections.push(sectionMap[mapKey]);
+      placed.add(mapKey);
+    }
+  }
+
+  // Add any remaining populated sections that were not listed in sectionOrder
+  for (const [key, sec] of Object.entries(sectionMap)) {
+    if (!placed.has(key)) {
+      sections.push(sec);
+      placed.add(key);
+    }
+  }
+
+  // Append custom sections
+  for (const custom of customSections) {
+    sections.push(custom);
   }
 
   return {
@@ -187,6 +394,7 @@ export function hydrateSectionIds(llmResume: z.infer<typeof resumeLlmSchema>): R
     sections,
   };
 }
+
 
 /** Filter sections that have bullet entries (bullet_list or projects) */
 export function bulletSections(resume: Resume): (BulletListSection | ProjectsSection)[] {

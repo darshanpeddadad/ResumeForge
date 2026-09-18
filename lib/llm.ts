@@ -50,35 +50,31 @@ Determine whether the input is a standard resume or a comprehensive master data 
      - NEVER DROP OR IGNORE AWARDS AND CERTIFICATIONS: They are high-leverage competitive differentiators that recruiters and ATS systems specifically look for. Because they require minimal vertical space, they ALWAYS fit within the 1-2 page budget.
 
 ═══════════════════════════════════════════════════════
-CORE SECTION SPECIFICATIONS
+ZERO-OMISSION CONTRACT: NO SECTION MAY BE MISSED
 ═══════════════════════════════════════════════════════
+You must exhaustively inspect the source document from top to bottom.
+You are strictly FORBIDDEN from omitting any category of achievement that exists in the candidate's data:
 
-1. WORK EXPERIENCE (type: "bullet_list"):
-   - heading: Company name
-   - subheading: Role / Job Title
-   - dateRange: e.g. "May 2024 – Aug 2024" or "2022 – Present"
-   - location: City, State or Country
-   - bullets: 3-5 high-impact, tailored achievement bullets per primary role (1-2 for older Tier 2 roles).
+1. WORK EXPERIENCE (populate "experience"):
+   - Curate top 3-5 roles for senior, 2-3 for junior.
+   - 3-5 high-impact Google XYZ achievement bullets per primary role (1-2 for older Tier 2 roles).
 
-2. EDUCATION (type: "bullet_list"):
+2. EDUCATION (populate "education"):
    - Extract degrees, universities, and educational institutions.
-   - heading: University / School name (e.g. "Technical University of Munich")
-   - subheading: Degree & Major (e.g. "M.Sc. in Computer Science")
-   - dateRange: e.g. "Oct 2024 – Sep 2027"
+   - heading: University / School name
+   - subheading: Degree & Major
+   - dateRange: Graduation / Attendance dates
    - location: City, Country
    - bullets: GPA, honors, relevant coursework, or thesis if mentioned.
 
-3. PROJECTS (type: "projects"):
+3. PROJECTS (populate "projects"):
    - Top 2-3 projects matching the role or candidate's best work.
    - heading: Project Name
-   - subheading: Technologies / Tech Stack used (e.g. "Next.js, TypeScript, Docker, Kubernetes")
-   - dateRange: e.g. "Jan 2024" or "Ongoing"
-   - bullets: 2-3 bullets explaining what was engineered, the technical challenge, and the outcome.
+   - subheading: Technologies / Tech Stack used
+   - bullets: 2-3 bullets explaining what was engineered, technical challenges, and outcomes.
 
-4. TECHNICAL SKILLS (type: "skills"):
-   - Consolidate ALL skills into ONE SINGLE "Technical Skills" section.
-   - DO NOT create multiple Technical Skills sections. Put all categories into this one section.
-   - Group into relevant categories:
+4. TECHNICAL SKILLS (populate "skills"):
+   - Consolidate ALL skills into categorized groups in "skills":
      • Languages: e.g. Python, TypeScript, Go, C++, SQL
      • Cloud & DevOps: e.g. Docker, Kubernetes, AWS, Terraform, CI/CD, Linux
      • Frameworks & Libraries: e.g. Next.js, React, Node.js, FastAPI
@@ -86,25 +82,31 @@ CORE SECTION SPECIFICATIONS
      • Developer Tools: e.g. Git, Helm, Prometheus, Grafana
    - When a JD is provided, incorporate matching skills from the JD that align with the candidate's actual background.
 
-5. CERTIFICATIONS (type: "simple_list"):
-   - DYNAMICALLY CREATE when any certificates, cloud certifications, or credentials are in the source text.
-   - title: "Certifications"
-   - items: flat list of strings, e.g. ["AWS Certified Solutions Architect – Associate (2024)", "Certified Kubernetes Administrator (CKA, Linux Foundation)"]
+5. CERTIFICATIONS (populate "certifications"):
+   - MANDATORY: If the candidate has ANY certifications, licenses, or professional credentials (e.g. AWS, GCP, Azure, CKA, Terraform, Cisco), you MUST extract them into the "certifications" array.
+   - Format: "Certification Name (Issuer, Year)"
 
-6. AWARDS & HONORS (type: "simple_list"):
-   - DYNAMICALLY CREATE when any awards, honors, hackathons, or scholarships are in the source text.
-   - title: "Awards & Honors" (or "Honors & Achievements")
-   - items: flat list of strings, e.g. ["1st Place, National AI Hackathon 2024 (out of 400 teams)", "Dean's List for Academic Excellence (2022 – 2024)"]
+6. AWARDS & HONORS (populate "awards"):
+   - MANDATORY: If the candidate has ANY awards, honors, hackathons, scholarships, Dean's List, or recognitions, you MUST extract them into the "awards" array.
+   - Format: "Award Title – Detail/Year"
 
-7. PROFESSIONAL SUMMARY (type: "text", optional/recommended):
-   - A punchy 2-3 sentence technical overview tailored to the target JD role.
-   - Focus on candidate's core engineering strengths, domain focus, and value.
-   - STRICTLY PROFESSIONAL: DO NOT use informal parentheticals like "(honestly)" or conversational asides.
+7. PUBLICATIONS & RESEARCH (populate "publications"):
+   - Any papers, research publications, or patents present in source text.
 
-8. OTHER DYNAMIC SECTIONS (if present):
-   - Leadership & Extracurriculars (type: "bullet_list")
-   - Publications & Research (type: "projects" or "simple_list")
-   - Patents (type: "simple_list")
+8. LEADERSHIP & VOLUNTEERING (populate "volunteerLeadership"):
+   - Any community, open-source maintainer, club, or volunteer roles.
+
+9. ADDITIONAL SECTIONS (populate "additionalSections"):
+   - Any other distinct section (Languages, Speaking, Interests) as { title, items }.
+
+10. SECTION ORDER (populate "sectionOrder"):
+    - Array of keys in optimal ATS order, e.g.:
+      ["summary", "skills", "experience", "projects", "education", "certifications", "awards"]
+
+11. PROFESSIONAL SUMMARY (populate "summary"):
+    - A punchy 2-3 sentence technical overview tailored to the target JD role.
+    - Focus on candidate's core engineering strengths, domain focus, and value.
+    - STRICTLY PROFESSIONAL: DO NOT use informal parentheticals like "(honestly)" or conversational asides.
 
 ═══════════════════════════════════════════════════════
 GOOGLE XYZ FORMULA + THE 5 ENGINEERING BULLET ARCHETYPES
