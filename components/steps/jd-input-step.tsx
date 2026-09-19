@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Languages,
+  Bookmark,
+  Wand2,
 } from "lucide-react";
 
 interface JDInputStepProps {
@@ -167,6 +169,34 @@ export function JDInputStep({
     }
   };
 
+  const [isCleaning, setIsCleaning] = useState(false);
+
+  const handleCleanText = async () => {
+    if (!value.trim()) return;
+    setIsCleaning(true);
+    try {
+      const res = await fetch("/api/extract-job-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clean", text: value }),
+      });
+      const data = await res.json();
+      if (data.success && data.cleanedText) {
+        onChange(data.cleanedText);
+        setOriginalText(data.cleanedText);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+
+  const bookmarkletCode =
+    typeof window !== "undefined"
+      ? `javascript:(function(){try{var t=document.title||'';var meta=(document.querySelector('meta[property="og:title"]')||{}).content||t;var main=document.querySelector('main, article, [role="main"], .job-description, #job-description')||document.body;var txt=main?main.innerText||main.textContent||'':'';if(!txt||txt.length<20){alert('Could not detect job text on this page.');return;}var target='${window.location.origin}/generate?importJob='+encodeURIComponent(JSON.stringify({title:meta,text:txt.slice(0,12000),url:window.location.href}));window.open(target,'_blank');}catch(e){alert('Bookmarklet error: '+e.message);}})();`
+      : `javascript:(function(){alert('Drag this button to your bookmarks bar.');})();`;
+
   return (
     <div className="flex flex-col gap-4 py-2">
       {/* Target Market / Country Selection */}
@@ -316,6 +346,30 @@ export function JDInputStep({
                 </Badge>
               </div>
             )}
+
+            {/* 1-Click Bookmarklet Fail-Safe for Logins & Private Intranets */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border border-border/60 bg-muted/40 text-xs">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 font-medium text-foreground">
+                  <Bookmark className="size-3.5 text-primary shrink-0" />
+                  <span>1-Click Browser Bookmarklet (Login walls & Intranet fail-safe)</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Drag this button to your Bookmarks Bar. Click it on <em>any</em> job page to import directly:
+                </p>
+              </div>
+              <a
+                href={bookmarkletCode}
+                onClick={(e) => {
+                  e.preventDefault();
+                  alert("Drag this button up to your browser's Bookmarks bar (Ctrl+Shift+B / Cmd+Shift+B). Then whenever you're viewing ANY job posting on LinkedIn, Workday, or an internal intranet, click it to auto-import into ResumeForge!");
+                }}
+                className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 font-semibold text-[11px] transition-colors cursor-grab active:cursor-grabbing shrink-0"
+                title="Drag me to your Bookmarks Bar"
+              >
+                <span>📌 Send to ResumeForge</span>
+              </a>
+            </div>
           </div>
         )}
 
@@ -394,6 +448,28 @@ export function JDInputStep({
 
         {/* Textarea for Job Description (Always visible to preview / edit) */}
         <div className="space-y-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold text-muted-foreground">
+              {inputMode === "url" ? "Extracted / Editable Job Text" : "Job Description Text"}
+            </span>
+            {value.length > 80 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleCleanText}
+                disabled={isCleaning}
+                className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                {isCleaning ? (
+                  <Loader2 className="size-3 mr-1 animate-spin" />
+                ) : (
+                  <Wand2 className="size-3 mr-1 text-primary" />
+                )}
+                Clean Boilerplate
+              </Button>
+            )}
+          </div>
           <Textarea
             placeholder="Paste the full job description here (responsibilities, required qualifications, tech stack) in English or any international language..."
             className="h-[140px] resize-none overflow-y-auto text-xs sm:text-sm rounded-xl font-mono leading-relaxed"

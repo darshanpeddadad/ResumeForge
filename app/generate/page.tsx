@@ -81,6 +81,33 @@ export default function GeneratePage() {
   const [isSavingToVault, setIsSavingToVault] = useState(false)
   const [vaultSavedSuccess, setVaultSavedSuccess] = useState(false)
 
+  // Listen for ?importJob= parameter from 1-Click Bookmarklet
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const rawImport = params.get("importJob")
+    if (rawImport) {
+      try {
+        const data = JSON.parse(decodeURIComponent(rawImport))
+        if (data.text) {
+          setJd(data.text)
+        }
+        if (data.title || data.company) {
+          setDetectedMeta({
+            title: data.title || "Target Role",
+            company: data.company || "Target Company",
+          })
+        }
+        if (session) {
+          setCurrentStep(3)
+        }
+        window.history.replaceState({}, document.title, window.location.pathname)
+      } catch {
+        // ignore parse error
+      }
+    }
+  }, [session])
+
   const atsScoreData = useMemo(() => {
     if (!resumeData) return null
     return calculateAtsScore(resumeData, jd)

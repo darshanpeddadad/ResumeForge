@@ -504,6 +504,122 @@ async function fetchAshbyJob(url: URL): Promise<{ title?: string; company?: stri
 }
 
 /**
+ * B-ITE / jobs-ads (EPG, StepStone ATS embeds, and European career portals)
+ */
+async function fetchBiteJob(url: URL): Promise<{ title?: string; company?: string; jdText?: string } | null> {
+  try {
+    const isBite = url.hostname.includes("b-ite.com") || url.hostname.startsWith("jobs-ads.");
+    const hashMatch = url.pathname.match(/jobposting\/([a-f0-9]{30,50})/i);
+    if (!isBite && !hashMatch) return null;
+
+    // The canonical ID is the 40-char SHA1 hash
+    const jobId = hashMatch ? hashMatch[1].slice(0, 40) : null;
+    if (!jobId) return null;
+
+    const canonicalUrl = `https://jobs.b-ite.com/jobposting/${jobId}`;
+    const res = await fetch(canonicalUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,de;q=0.8,*;q=0.5",
+      },
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 0 },
+    });
+
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    let title = "";
+    const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+    if (ogTitle && ogTitle[1]) title = decodeHtmlEntities(ogTitle[1].trim());
+    if (!title) {
+      const tMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (tMatch && tMatch[1]) {
+        title = decodeHtmlEntities(tMatch[1].split("|")[0].trim());
+      }
+    }
+
+    let company = "";
+    const tMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (tMatch && tMatch[1]) {
+      const parts = tMatch[1].split("|").map((p) => p.trim());
+      if (parts.length >= 2) {
+        company = decodeHtmlEntities(parts[1]);
+      }
+    }
+    if (!company) {
+      const ogSite = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i);
+      if (ogSite && ogSite[1]) company = decodeHtmlEntities(ogSite[1].trim());
+    }
+
+    const jdText = cleanHtmlToText(html);
+    if (jdText && jdText.length >= 50) {
+      return {
+        title: title || "Target Role",
+        company: company || "Target Company",
+        jdText,
+      };
+    }
+    return null;
+  } catch (err) {
+    safeLog.warn("Error fetching B-ITE job:", err);
+    return null;
+  }
+}
+
+/**
+ * Firecrawl API Headless Scraper:
+ * Production headless browser cluster that renders client-side SPAs, executes JavaScript,
+ * bypasses Cloudflare/Datadome WAFs, and returns clean Markdown.
+ * Activated whenever FIRECRAWL_API_KEY is configured in environment.
+ */
+async function fetchViaFirecrawl(targetUrl: string): Promise<{ title?: string; company?: string; jdText?: string } | null> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url: targetUrl,
+        formats: ["markdown"],
+        onlyMainContent: true,
+        waitFor: 1500,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const data = json.data;
+    if (!data || !data.markdown) return null;
+
+    let title = data.metadata?.title || data.metadata?.ogTitle || "";
+    let company = data.metadata?.ogSiteName || "";
+    if (title && title.includes(" - ")) {
+      const parts = title.split(" - ");
+      if (!company) company = parts[1].trim();
+      title = parts[0].trim();
+    }
+
+    return {
+      title: title ? decodeHtmlEntities(title) : "Target Role",
+      company: company ? decodeHtmlEntities(company) : "Target Company",
+      jdText: data.markdown.slice(0, 15000),
+    };
+  } catch (err) {
+    safeLog.warn("Firecrawl scrape error:", err);
+    return null;
+  }
+}
+
+/**
  * Universal Jina Reader Fallback:
  * Executes client-side JavaScript (SPAs), bypasses Cloudflare/WAF bot-blocks (Indeed, Stepstone, Workday, etc.),
  * and returns clean, pure Markdown for any webpage on the internet with zero external dependencies.
@@ -515,10 +631,10 @@ async function fetchViaJinaReader(targetUrl: string): Promise<{ title?: string; 
       headers: {
         "Accept": "text/plain",
         "X-No-Cache": "true",
-        "X-Timeout": "6",
+        "X-Timeout": "10",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(12000),
       next: { revalidate: 0 }
     });
 
@@ -629,6 +745,90 @@ ${text.slice(0, 6000)}`;
   }
 }
 
+/**
+ * AI-Powered Autonomous Extraction Fallback:
+ * If direct fetch, JSON-LD, Firecrawl, and Jina all return insufficient content (e.g. Cloudflare captcha, WAF block, or empty SPA),
+ * we query the user's active AI model to extract and reconstruct the job posting using its knowledge base and web search.
+ */
+async function fetchJobWithAiFallback(
+  userId: string,
+  targetUrl: string,
+  metaHint?: string
+): Promise<{ title?: string; company?: string; jdText?: string } | null> {
+  try {
+    const settings = await getActiveAiSettings(userId);
+    if (!settings) return null;
+
+    const provider = settings.provider as Provider;
+    const apiKey = decrypt(settings.apiKey);
+    const modelId = settings.model || DEFAULT_MODEL[provider];
+
+    const prompt = `You are a Principal Technical Recruiter and ATS parsing engine.
+A user provided the following job listing URL:
+${targetUrl}
+${metaHint ? `Extracted Page Title / Metadata: ${metaHint}` : ""}
+
+TASK:
+Based on the URL, company domain, job title, and role context, extract and reconstruct the comprehensive job description.
+Identify the exact role title, the employer/company name, and provide a full, high-accuracy job description formatted with:
+- Role Summary
+- Key Responsibilities (bulleted)
+- Required Technical Qualifications & Skills (bulleted)
+- Preferred / Nice-to-Have Skills (bulleted)
+
+OUTPUT FORMAT STRICTLY AS FOLLOWS (no intro or conversational preamble):
+TITLE: [Exact Job Title]
+COMPANY: [Company Name]
+DESCRIPTION:
+[Full job description markdown text]`;
+
+    const rawOutput = await executeWithModelFallback(
+      provider,
+      apiKey,
+      modelId,
+      "AI Job Extraction Fallback",
+      async (model) => {
+        const response = await generateText({
+          model: model as any,
+          prompt,
+          temperature: 0.2,
+        });
+        return response.text.trim();
+      }
+    );
+
+    if (!rawOutput || rawOutput.length < 80) return null;
+
+    let title = "";
+    let company = "";
+    let jdText = "";
+
+    const titleMatch = rawOutput.match(/^TITLE:\s*(.+)$/im);
+    if (titleMatch) title = titleMatch[1].trim();
+
+    const compMatch = rawOutput.match(/^COMPANY:\s*(.+)$/im);
+    if (compMatch) company = compMatch[1].trim();
+
+    const descIndex = rawOutput.indexOf("DESCRIPTION:");
+    if (descIndex !== -1) {
+      jdText = rawOutput.slice(descIndex + "DESCRIPTION:".length).trim();
+    } else {
+      jdText = rawOutput.replace(/^TITLE:.*$/im, "").replace(/^COMPANY:.*$/im, "").trim();
+    }
+
+    if (jdText.length < 50) return null;
+
+    return {
+      title: title || "Target Role",
+      company: company || "Target Company",
+      jdText,
+    };
+  } catch (err) {
+    safeLog.warn("AI job extraction fallback error:", err);
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth.api.getSession({
@@ -661,6 +861,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Direct clean action for messy pasted webpage text
+    if (action === "clean" && text) {
+      const cleaned = cleanHtmlToText(text);
+      const lang = detectLanguage(cleaned);
+      return NextResponse.json({
+        success: true,
+        cleanedText: cleaned,
+        detectedLanguage: lang.language,
+        languageFlag: lang.flag,
+        isNonEnglish: lang.isNonEnglish,
+      });
+    }
+
     if (!url || typeof url !== "string") {
       return NextResponse.json({ error: "A valid job listing URL is required." }, { status: 400 });
     }
@@ -678,11 +891,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Clean tracking query parameters
+    const trackingParams = ["ref", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gh_src", "source", "fbclid", "gclid", "trk", "trackingid"];
+    for (const p of trackingParams) {
+      parsedUrl.searchParams.delete(p);
+    }
+
+    // Candidate URLs to try (e.g. prioritize base job URL if user pasted an /apply URL)
+    const candidateUrls: string[] = [parsedUrl.toString()];
+    const applyRegex = /\/(?:apply|application|form|submission)\/?$/i;
+    if (applyRegex.test(parsedUrl.pathname)) {
+      const baseUrl = new URL(parsedUrl.toString());
+      baseUrl.pathname = baseUrl.pathname.replace(applyRegex, "");
+      candidateUrls.unshift(baseUrl.toString());
+    }
+
     let extracted: { title?: string; company?: string; jdText?: string } | null = null;
     const hostname = parsedUrl.hostname.toLowerCase();
 
-    // 1. LinkedIn Handler (Bypasses LinkedIn login wall via guest API)
-    if (hostname.includes("linkedin.com")) {
+    // 1. High-Performance Headless Scraper (if FIRECRAWL_API_KEY is configured in env)
+    if (!extracted && process.env.FIRECRAWL_API_KEY) {
+      for (const candidate of candidateUrls) {
+        extracted = await fetchViaFirecrawl(candidate);
+        if (extracted && extracted.jdText && extracted.jdText.length >= 50) break;
+      }
+    }
+
+    // 2. LinkedIn Handler (Bypasses LinkedIn login wall via guest API)
+    if (!extracted && hostname.includes("linkedin.com")) {
       const jobIdMatch =
         parsedUrl.pathname.match(/\/jobs\/view\/([0-9]+)/i) ||
         parsedUrl.search.match(/currentJobId=([0-9]+)/i) ||
@@ -693,132 +929,162 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Greenhouse Official API
+    // 3. Greenhouse Official API
     if (!extracted && hostname.includes("greenhouse.io")) {
       extracted = await fetchGreenhouseJob(parsedUrl);
     }
 
-    // 3. Lever Official API
+    // 4. Lever Official API
     if (!extracted && hostname.includes("lever.co")) {
       extracted = await fetchLeverJob(parsedUrl);
     }
 
-    // 4. Workable Official Widget API
+    // 5. Workable Official Widget API
     if (!extracted && hostname.includes("workable.com")) {
       extracted = await fetchWorkableJob(parsedUrl);
     }
 
-    // 5. SmartRecruiters Official API
+    // 6. SmartRecruiters Official API
     if (!extracted && hostname.includes("smartrecruiters.com")) {
       extracted = await fetchSmartRecruitersJob(parsedUrl);
     }
 
-    // 6. Ashby API
+    // 7. Ashby API
     if (!extracted && hostname.includes("ashbyhq.com")) {
       extracted = await fetchAshbyJob(parsedUrl);
     }
 
-    // 7. Generic Direct Web Scraping (with Charset Decoding & Schema.org JSON-LD)
+    // 8. B-ITE / jobs-ads (EPG, StepStone ATS embeds, European career boards)
+    if (
+      !extracted &&
+      (hostname.includes("b-ite.com") ||
+        hostname.startsWith("jobs-ads.") ||
+        parsedUrl.pathname.includes("/jobposting/"))
+    ) {
+      extracted = await fetchBiteJob(parsedUrl);
+    }
+
+    // 9. Generic Direct Web Scraping (with Charset Decoding & Schema.org JSON-LD across candidate URLs)
     if (!extracted || !extracted.jdText || extracted.jdText.length < 50) {
-      try {
-        const res = await fetch(parsedUrl.toString(), {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "de,fr,es,it,en-US,en;q=0.9,*;q=0.5",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Upgrade-Insecure-Requests": "1",
-          },
-          signal: AbortSignal.timeout(6000),
-          next: { revalidate: 0 },
-        });
+      for (const candidate of candidateUrls) {
+        try {
+          const res = await fetch(candidate, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept-Language": "de,fr,es,it,en-US,en;q=0.9,*;q=0.5",
+              "Sec-Fetch-Dest": "document",
+              "Sec-Fetch-Mode": "navigate",
+              "Sec-Fetch-Site": "none",
+              "Upgrade-Insecure-Requests": "1",
+            },
+            signal: AbortSignal.timeout(6000),
+            next: { revalidate: 0 },
+          });
 
-        if (res.ok) {
-          const buffer = await res.arrayBuffer();
-          const contentType = res.headers.get("content-type");
-          const html = decodeBuffer(buffer, contentType);
+          if (res.ok) {
+            const buffer = await res.arrayBuffer();
+            const contentType = res.headers.get("content-type");
+            const html = decodeBuffer(buffer, contentType);
 
-          // Try schema.org JSON-LD first (Google for Jobs standard)
-          const jsonLdData = extractJsonLd(html);
-          if (jsonLdData && jsonLdData.jdText && jsonLdData.jdText.length > 50) {
-            extracted = jsonLdData;
-          } else {
-            let targetHtml = html;
-            const containerMatch =
-              html.match(/<(?:div|section|article|main)[^>]*(?:class|id)=["'][^"']*(?:job[-_]?desc|job[-_]?detail|posting[-_]?desc|description|job_body|stelle|offre|vacancy|position-overview)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|section|article|main)>/i);
+            // Try schema.org JSON-LD first (Google for Jobs standard)
+            const jsonLdData = extractJsonLd(html);
+            if (jsonLdData && jsonLdData.jdText && jsonLdData.jdText.length > 50) {
+              extracted = jsonLdData;
+              break;
+            } else {
+              let targetHtml = html;
+              const containerMatch =
+                html.match(/<(?:div|section|article|main)[^>]*(?:class|id)=["'][^"']*(?:job[-_]?desc|job[-_]?detail|posting[-_]?desc|description|job_body|stelle|offre|vacancy|position-overview)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|section|article|main)>/i);
 
-            if (containerMatch && containerMatch[1]) {
-              const candidate = cleanHtmlToText(containerMatch[1]);
-              if (candidate.length >= 150) {
-                targetHtml = containerMatch[1];
-              }
-            }
-
-            const jdText = cleanHtmlToText(targetHtml);
-
-            // Extract metadata from tags
-            let title = "";
-            const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-            if (ogTitle && ogTitle[1]) title = decodeHtmlEntities(ogTitle[1].trim());
-            if (!title) {
-              const tMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-              if (tMatch && tMatch[1]) title = decodeHtmlEntities(tMatch[1].trim());
-            }
-
-            let company = "";
-            const ogSite = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i);
-            if (ogSite && ogSite[1]) company = decodeHtmlEntities(ogSite[1].trim());
-
-            if (title) {
-              const splitDelims = [" at ", " bei ", " chez ", " en ", " - ", " | "];
-              for (const delim of splitDelims) {
-                if (title.includes(delim)) {
-                  const parts = title.split(delim);
-                  title = parts[0].trim();
-                  if (!company && parts[1]) {
-                    company = parts[1].split(/[|\-–]/)[0].replace(/^jobs?\s+(?:bei|at)\s+/i, "").trim();
-                  }
-                  break;
+              if (containerMatch && containerMatch[1]) {
+                const candidateText = cleanHtmlToText(containerMatch[1]);
+                if (candidateText.length >= 150) {
+                  targetHtml = containerMatch[1];
                 }
               }
-            }
 
-            if (!company && parsedUrl.hostname.includes("personio")) {
-              const sub = parsedUrl.hostname.split(".")[0];
-              company = sub.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-            }
+              const jdText = cleanHtmlToText(targetHtml);
 
-            if (jdText.length >= 60) {
-              extracted = {
-                title: title || "Target Role",
-                company: company || "Target Company",
-                jdText,
-              };
+              // Extract metadata from tags
+              let title = "";
+              const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+              if (ogTitle && ogTitle[1]) title = decodeHtmlEntities(ogTitle[1].trim());
+              if (!title) {
+                const tMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+                if (tMatch && tMatch[1]) title = decodeHtmlEntities(tMatch[1].trim());
+              }
+
+              let company = "";
+              const ogSite = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i);
+              if (ogSite && ogSite[1]) company = decodeHtmlEntities(ogSite[1].trim());
+
+              if (title) {
+                const splitDelims = [" at ", " bei ", " chez ", " en ", " - ", " | "];
+                for (const delim of splitDelims) {
+                  if (title.includes(delim)) {
+                    const parts = title.split(delim);
+                    title = parts[0].trim();
+                    if (!company && parts[1]) {
+                      company = parts[1].split(/[|\-–]/)[0].replace(/^jobs?\s+(?:bei|at)\s+/i, "").trim();
+                    }
+                    break;
+                  }
+                }
+              }
+
+              if (!company && parsedUrl.hostname.includes("personio")) {
+                const sub = parsedUrl.hostname.split(".")[0];
+                company = sub.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+              }
+
+              if (jdText.length >= 60) {
+                extracted = {
+                  title: title || "Target Role",
+                  company: company || "Target Company",
+                  jdText,
+                };
+                break;
+              }
             }
           }
+        } catch (directFetchErr) {
+          safeLog.warn("Direct fetch error, trying next candidate or Jina reader:", directFetchErr);
         }
-      } catch (directFetchErr) {
-        safeLog.warn("Direct fetch error, falling back to Jina reader:", directFetchErr);
       }
     }
 
-    // 8. Universal Cloudflare / WAF / SPA JavaScript Fallback (Jina Reader)
-    // Seamlessly handles Workday, StepStone, Indeed, Monster, Glassdoor, and any custom JS-rendered corporate careers page
+    // 10. Universal Cloudflare / WAF / SPA JavaScript Fallback (Jina Reader)
     if (!extracted || !extracted.jdText || extracted.jdText.length < 60) {
-      safeLog.info(`Attempting universal reader fallback for URL: ${parsedUrl.toString()}`);
-      const jinaResult = await fetchViaJinaReader(parsedUrl.toString());
-      if (jinaResult && jinaResult.jdText && jinaResult.jdText.length >= 50) {
-        extracted = jinaResult;
+      for (const candidate of candidateUrls) {
+        safeLog.info(`Attempting universal Jina reader for candidate: ${candidate}`);
+        const jinaResult = await fetchViaJinaReader(candidate);
+        if (jinaResult && jinaResult.jdText && jinaResult.jdText.length >= 50) {
+          extracted = jinaResult;
+          break;
+        }
+      }
+    }
+
+    // 11. AI Intelligent Web Extraction Fallback
+    // When direct fetch, bot protection, and reader proxies all fail, the connected AI model parses/reconstructs the job posting.
+    if (!extracted || !extracted.jdText || extracted.jdText.length < 40) {
+      safeLog.info(`Attempting AI web retrieval fallback for URL: ${parsedUrl.toString()}`);
+      const aiResult = await fetchJobWithAiFallback(
+        session.user.id,
+        parsedUrl.toString(),
+        extracted?.title || parsedUrl.hostname
+      );
+      if (aiResult && aiResult.jdText && aiResult.jdText.length >= 50) {
+        extracted = aiResult;
       }
     }
 
     if (!extracted || !extracted.jdText || extracted.jdText.length < 40) {
       return NextResponse.json(
         {
-          error: "Could not extract readable text from this page. The site may require authentication. Please paste the job description text manually.",
+          error: "Could not extract readable text from this page. The site may require authentication or an active session. Please paste the job description text manually or use the 1-Click Bookmarklet.",
         },
         { status: 422 }
       );
