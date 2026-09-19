@@ -32,6 +32,15 @@ const BANNED_PATTERNS: Array<[RegExp, string | ((match: string, ...args: any[]) 
   [/,?\s*\bresulting in\b/gi, "; achieving"],
   [/,?\s*\bleading to a\b/gi, "; achieved a"],
   [/,?\s*\bleading to\b/gi, "; achieving"],
+  // Passive voice & weak duty statements auto-upgraded to strong active verbs
+  [/\b(was responsible for|is responsible for|responsible for)\b/gi, "managed"],
+  [/\b(duties included|tasks included)\b/gi, "executed"],
+  [/\b(assisted with|assisted in)\b/gi, "co-engineered"],
+  [/\b(helped with|helped to|helped)\b/gi, "built"],
+  [/\b(worked on developing|worked on building|worked on)\b/gi, "developed"],
+  [/\b(participated in developing|participated in)\b/gi, "engineered"],
+  [/\b(supported the team in|supported the team by|supported the team that)\b/gi, "collaborated to deliver"],
+  [/\b(handled the|handled)\b/gi, "managed"],
   [/\s*\((which is still my go-to stack, honestly|honestly|which surprised us|in practice)\)/gi, ""],
 ];
 
@@ -67,7 +76,7 @@ AI SIGNALS TO ELIMINATE:
 
 STRICT RULES:
 - Preserve EVERY fact, number, date, company, technology, and metric exactly as given.
-- Sound like a sharp, authentic senior engineer — direct, articulate, professional.
+- Sound like a sharp, authentic senior professional and domain authority in the candidate's field — direct, articulate, and compelling.
 - NEVER add informal conversational parentheticals like "(honestly)" or "(we called it Y)".
 - Return ONLY the rewritten text, with no preamble.`;
 

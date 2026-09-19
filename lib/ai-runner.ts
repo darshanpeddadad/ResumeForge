@@ -67,8 +67,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }
 
-// Serverless execution budget per model attempt (5.5s) to guarantee response within 10s Vercel limit
-const ATTEMPT_TIMEOUT_MS = 5500;
+// Execution budget per model attempt: 35s allows full structured resume/translation generation without premature aborts
+const ATTEMPT_TIMEOUT_MS = 35000;
 
 export async function executeWithModelFallback<T>(
   provider: Provider,
@@ -91,7 +91,8 @@ export async function executeWithModelFallback<T>(
       throw primaryError;
     }
 
-    const fallbacks = getModelFallbacks(provider, primaryModel);
+    // Limit to top 2 fallbacks to prevent cascading hammering of the provider's API
+    const fallbacks = getModelFallbacks(provider, primaryModel).slice(0, 2);
     if (fallbacks.length === 0) {
       throw primaryError;
     }
@@ -102,6 +103,9 @@ export async function executeWithModelFallback<T>(
         `[${taskName}] Primary model "${primaryModel}" on ${provider} failed (${(primaryError as Error).message}). Cascading to fallback model "${fbModel}"...`
       );
       try {
+        // Brief pause before fallback to allow transient rate-limit buffers to clear
+        await new Promise((res) => setTimeout(res, 600));
+
         const fallbackInstance = getAiModel(provider, apiKey, fbModel);
         const result = await withTimeout(
           operation(fallbackInstance, fbModel),

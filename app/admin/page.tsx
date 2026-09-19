@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Navbar } from "@/components/navbar";
@@ -44,6 +44,10 @@ import {
   FileText,
   Mail,
   Send,
+  Megaphone,
+  DollarSign,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -136,6 +140,14 @@ interface HealthData {
     availableProviders: string[];
   };
   countryProfilesCount: number;
+}
+
+interface AnnouncementItem {
+  id: string;
+  message: string;
+  type: "info" | "warning" | "success";
+  isActive: boolean;
+  createdAt: string;
 }
 
 function formatRelativeTime(dateString?: string | null): string {
@@ -256,6 +268,120 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  // System Announcements State & Fetch
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [announcementMsg, setAnnouncementMsg] = useState("");
+  const [announcementType, setAnnouncementType] = useState<"info" | "warning" | "success">("info");
+  const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+
+  const fetchAnnouncements = useCallback(async () => {
+    try {
+      const res = await fetch("/api/announcements?all=true");
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data.announcements || []);
+      }
+    } catch (err) {
+      console.error("Failed to load announcements:", err);
+    }
+  }, []);
+
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!announcementMsg.trim()) return;
+    setIsPostingAnnouncement(true);
+    try {
+      const res = await fetch("/api/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: announcementMsg.trim(),
+          type: announcementType,
+          isActive: true,
+        }),
+      });
+      if (res.ok) {
+        setAnnouncementMsg("");
+        await fetchAnnouncements();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to broadcast announcement");
+      }
+    } catch {
+      alert("Error contacting server");
+    } finally {
+      setIsPostingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm("Are you sure you want to dismiss or remove this announcement banner?")) return;
+    try {
+      const res = await fetch(`/api/announcements?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await fetchAnnouncements();
+      } else {
+        alert("Failed to delete announcement");
+      }
+    } catch {
+      alert("Error contacting server");
+    }
+  };
+
+  // AI Cost & Token Telemetry derived from Audit Logs
+  const aiTelemetry = useMemo(() => {
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let totalCost = 0;
+    let byokSavings = 0;
+    const providerCounts: Record<string, number> = {};
+
+    logs.forEach((log) => {
+      let pTokens = 3500;
+      let cTokens = 1500;
+      if (log.type === "cover_letter") {
+        pTokens = 1200;
+        cTokens = 600;
+      } else if (log.type === "outreach") {
+        pTokens = 1000;
+        cTokens = 500;
+      }
+      promptTokens += pTokens;
+      completionTokens += cTokens;
+
+      const prov = (log.provider || "google").toLowerCase();
+      providerCounts[prov] = (providerCounts[prov] || 0) + 1;
+
+      let pRate = 0.000075;
+      let cRate = 0.0003;
+      if (prov.includes("openai") || (log.model || "").includes("gpt")) {
+        pRate = 0.0025;
+        cRate = 0.01;
+      } else if (prov.includes("anthropic") || (log.model || "").includes("claude")) {
+        pRate = 0.003;
+        cRate = 0.015;
+      }
+
+      const cost = (pTokens / 1000) * pRate + (cTokens / 1000) * cRate;
+      totalCost += cost;
+
+      if (log.userEmail && log.provider) {
+        byokSavings += cost;
+      }
+    });
+
+    return {
+      promptTokens,
+      completionTokens,
+      totalTokens: promptTokens + completionTokens,
+      totalCost,
+      byokSavings,
+      providerCounts,
+    };
+  }, [logs]);
+
   const refreshAll = useCallback(async () => {
     setIsLoading(true);
     await Promise.allSettled([
@@ -263,10 +389,11 @@ export default function AdminDashboardPage() {
       fetchUsers(userSearch),
       fetchLogs(logTypeFilter, logStatusFilter),
       fetchHealth(),
+      fetchAnnouncements(),
     ]);
     setLastRefreshedAt(new Date());
     setIsLoading(false);
-  }, [fetchStats, fetchUsers, fetchLogs, fetchHealth, userSearch, logTypeFilter, logStatusFilter]);
+  }, [fetchStats, fetchUsers, fetchLogs, fetchHealth, fetchAnnouncements, userSearch, logTypeFilter, logStatusFilter]);
 
   // Initial load
   useEffect(() => {
@@ -586,7 +713,7 @@ export default function AdminDashboardPage() {
 
         {/* Dashboard Tabs */}
         <Tabs defaultValue="overview" className="w-full space-y-6">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full bg-muted/40 p-1 rounded-2xl border border-border/40">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full bg-muted/40 p-1 rounded-2xl border border-border/40">
             <TabsTrigger value="overview" className="rounded-xl text-xs font-medium data-[state=active]:bg-background">
               <Activity className="size-3.5 mr-1.5" />
               Overview
@@ -606,6 +733,13 @@ export default function AdminDashboardPage() {
             <TabsTrigger value="ats" className="rounded-xl text-xs font-medium data-[state=active]:bg-background">
               <Globe className="size-3.5 mr-1.5" />
               ATS Profiles
+            </TabsTrigger>
+            <TabsTrigger value="broadcast" className="rounded-xl text-xs font-medium data-[state=active]:bg-background">
+              <Megaphone className="size-3.5 mr-1.5 text-primary" />
+              Broadcasts
+              {announcements.some((a) => a.isActive) && (
+                <span className="ml-1.5 size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -1426,6 +1560,63 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
             </Card>
+
+            {/* AI Cost & Token Telemetry */}
+            <Card className="glass-card border border-border/50 p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/40 pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <DollarSign className="size-4 text-emerald-400" />
+                  AI Token & Infrastructure Cost Telemetry
+                </CardTitle>
+                <Badge variant="outline" className="text-[11px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                  Telemetry Active · {logs.length} Logged Runs
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 rounded-xl border border-border/40 bg-muted/20 space-y-1">
+                  <div className="text-[11px] text-muted-foreground uppercase font-medium">Est. Prompt Tokens</div>
+                  <div className="text-lg font-black text-foreground font-mono">
+                    {aiTelemetry.promptTokens.toLocaleString()}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">System prompts + user JDs</p>
+                </div>
+
+                <div className="p-3 rounded-xl border border-border/40 bg-muted/20 space-y-1">
+                  <div className="text-[11px] text-muted-foreground uppercase font-medium">Est. Output Tokens</div>
+                  <div className="text-lg font-black text-primary font-mono">
+                    {aiTelemetry.completionTokens.toLocaleString()}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Generated LaTeX & outreach</p>
+                </div>
+
+                <div className="p-3 rounded-xl border border-border/40 bg-muted/20 space-y-1">
+                  <div className="text-[11px] text-muted-foreground uppercase font-medium">Gross LLM Cost</div>
+                  <div className="text-lg font-black text-foreground font-mono">
+                    ${aiTelemetry.totalCost.toFixed(3)}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Based on provider API rates</p>
+                </div>
+
+                <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-1">
+                  <div className="text-[11px] text-emerald-400 uppercase font-medium">BYOK Cost Offset</div>
+                  <div className="text-lg font-black text-emerald-400 font-mono">
+                    ${aiTelemetry.byokSavings.toFixed(3)}
+                  </div>
+                  <p className="text-[10px] text-emerald-400/80">Saved via user-provided keys</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl border border-border/30 bg-muted/10 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="size-3.5 text-amber-400" />
+                  <span>Model baseline: Gemini 2.5 Flash ($0.075/1M), Claude 3.5 Sonnet ($3.00/1M), GPT-4o ($2.50/1M).</span>
+                </div>
+                <span className="font-semibold text-foreground">
+                  Net Platform Cost: ${(aiTelemetry.totalCost - aiTelemetry.byokSavings).toFixed(3)}
+                </span>
+              </div>
+            </Card>
           </TabsContent>
 
           {/* ═══════════════════════════════════════════════════════
@@ -1508,6 +1699,181 @@ export default function AdminDashboardPage() {
                 })()}
               </div>
             </div>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════════
+              TAB 6: BROADCAST ANNOUNCEMENTS & SYSTEM NOTICES
+          ═══════════════════════════════════════════════════════ */}
+          <TabsContent value="broadcast" className="space-y-6">
+            {/* Live Banner Preview */}
+            <Card className="glass-card border border-border/50 p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Megaphone className="size-4 text-primary" />
+                  Live Broadcast Banner Preview
+                </CardTitle>
+                <span className="text-[11px] text-muted-foreground">What users currently see</span>
+              </div>
+
+              {announcements.find((a) => a.isActive) ? (
+                (() => {
+                  const active = announcements.find((a) => a.isActive)!;
+                  return (
+                    <div
+                      className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
+                        active.type === "warning"
+                          ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                          : active.type === "success"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : "bg-primary/10 border-primary/30 text-primary"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="size-2 rounded-full bg-current animate-ping" />
+                        <span className="font-semibold uppercase text-[10px]">[{active.type}]</span>
+                        <span className="font-medium">{active.message}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteAnnouncement(active.id)}
+                        className="h-6 text-[10px] hover:bg-destructive/20 hover:text-destructive"
+                      >
+                        Dismiss Now
+                      </Button>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="p-4 rounded-xl border border-dashed border-border/40 bg-muted/10 text-center text-xs text-muted-foreground">
+                  No active broadcast banner currently displayed to users.
+                </div>
+              )}
+            </Card>
+
+            {/* Compose New Announcement */}
+            <Card className="glass-card border border-border/50 p-5 space-y-4">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Plus className="size-4 text-primary" />
+                Broadcast New Announcement
+              </CardTitle>
+              <form onSubmit={handleCreateAnnouncement} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="sm:col-span-3 space-y-1">
+                    <label className="text-xs font-medium text-foreground">Announcement Message</label>
+                    <Input
+                      placeholder="e.g. System upgrade scheduled at 2:00 AM UTC. No downtime expected."
+                      value={announcementMsg}
+                      onChange={(e) => setAnnouncementMsg(e.target.value)}
+                      required
+                      className="text-xs h-9 bg-muted/40 border-border/50"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-foreground">Notice Style</label>
+                    <select
+                      value={announcementType}
+                      onChange={(e) => setAnnouncementType(e.target.value as any)}
+                      className="w-full h-9 rounded-xl border border-border/50 bg-muted/40 px-2.5 text-xs text-foreground"
+                    >
+                      <option value="info">Info (Blue)</option>
+                      <option value="warning">Warning (Amber)</option>
+                      <option value="success">Success (Emerald)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    disabled={isPostingAnnouncement || !announcementMsg.trim()}
+                    className="glossy-btn-primary text-xs font-semibold h-8"
+                  >
+                    <Megaphone className="size-3.5 mr-1.5" />
+                    {isPostingAnnouncement ? "Broadcasting..." : "Publish to All Users"}
+                  </Button>
+                </div>
+              </form>
+            </Card>
+
+            {/* Past Announcements History */}
+            <Card className="glass-card border border-border/50 p-5 space-y-4">
+              <CardTitle className="text-sm font-semibold">Broadcast History & Audit</CardTitle>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border/40 text-muted-foreground">
+                      <th className="pb-2.5 font-medium">Timestamp</th>
+                      <th className="pb-2.5 font-medium">Type</th>
+                      <th className="pb-2.5 font-medium">Message</th>
+                      <th className="pb-2.5 font-medium">Status</th>
+                      <th className="pb-2.5 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/20">
+                    {announcements.map((a) => (
+                      <tr key={a.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 text-muted-foreground whitespace-nowrap">
+                          {new Date(a.createdAt).toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="py-2.5">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] capitalize ${
+                              a.type === "warning"
+                                ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                                : a.type === "success"
+                                ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                                : "text-primary border-primary/30 bg-primary/10"
+                            }`}
+                          >
+                            {a.type}
+                          </Badge>
+                        </td>
+                        <td className="py-2.5 font-medium text-foreground max-w-md truncate">
+                          {a.message}
+                        </td>
+                        <td className="py-2.5">
+                          {a.isActive ? (
+                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                              Dismissed
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteAnnouncement(a.id)}
+                            className="h-6 text-[10px] text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="size-3 mr-1" />
+                            Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {announcements.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="text-center py-6 text-muted-foreground">
+                          No past announcements recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>

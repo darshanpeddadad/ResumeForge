@@ -51,6 +51,33 @@ export async function ensureAdminUserExists(): Promise<void> {
           "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
         )
       `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "saved_application" (
+          "id" TEXT PRIMARY KEY,
+          "user_id" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+          "job_title" TEXT NOT NULL,
+          "company_name" TEXT NOT NULL,
+          "target_country" TEXT NOT NULL DEFAULT 'US',
+          "ats_score" INTEGER NOT NULL DEFAULT 0,
+          "status" TEXT NOT NULL DEFAULT 'saved',
+          "resume_data" TEXT,
+          "latex_code" TEXT,
+          "cover_letter" TEXT,
+          "outreach" TEXT,
+          "notes" TEXT,
+          "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+          "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "system_announcement" (
+          "id" TEXT PRIMARY KEY,
+          "message" TEXT NOT NULL,
+          "type" TEXT NOT NULL DEFAULT 'info',
+          "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+          "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
     } catch (schemaErr) {
       safeLog.warn("Schema self-healing notice:", schemaErr);
     }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { authClient } from "@/lib/auth-client"
@@ -14,6 +14,10 @@ import { ArrowRight02Icon } from "@/components/ui/arrow-right-02"
 import { UndoIcon } from "@/components/ui/undo"
 import { CloudDownloadIcon } from "@/components/ui/cloud-download"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { FolderKanban } from "lucide-react"
+import { AtsScoreCard } from "@/components/ats-score-card"
+import { DiffInspector } from "@/components/diff-inspector"
+import { calculateAtsScore } from "@/lib/ats-scorer"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,7 +51,7 @@ import type { CoverLetterResult } from "@/lib/cover-letter-generator"
 import { extractTextFromFile, extractLinksFromFile } from "@/lib/document-parser"
 import { generateLatex } from "@/lib/latex-renderer"
 import { renderColdEmail, renderColdDM } from "@/lib/template-renderer"
-import type { Resume } from "@/lib/schemas/resume"
+import type { Resume, ResumeSection } from "@/lib/schemas/resume"
 import type { Highlights } from "@/lib/highlights"
 import type { ColdEmail, ColdDM } from "@/lib/schemas/outreach"
 
@@ -72,6 +76,83 @@ export default function GeneratePage() {
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false)
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
   const [error, setError] = useState<{ message: string; toSettings: boolean } | null>(null)
+
+  const [detectedMeta, setDetectedMeta] = useState<{ title: string; company: string } | null>(null)
+  const [isSavingToVault, setIsSavingToVault] = useState(false)
+  const [vaultSavedSuccess, setVaultSavedSuccess] = useState(false)
+
+  const atsScoreData = useMemo(() => {
+    if (!resumeData) return null
+    return calculateAtsScore(resumeData, jd)
+  }, [resumeData, jd])
+
+  const handleInjectKeyword = useCallback((keyword: string) => {
+    setResumeData((prev) => {
+      if (!prev) return prev
+      const updated = { ...prev, sections: [...prev.sections] }
+      const existingIndex = updated.sections.findIndex((s) => s.type === "skills")
+      if (existingIndex === -1) {
+        const newSection: ResumeSection = {
+          id: "skills-injected",
+          title: "Technical Skills",
+          type: "skills",
+          content: "",
+          items: [],
+          entries: [],
+          categories: [{ label: "Core Competencies", items: [keyword] }],
+        }
+        updated.sections = [newSection, ...updated.sections]
+      } else {
+        const target = updated.sections[existingIndex]
+        const categories = [...(target.categories || [])]
+        if (categories.length === 0) {
+          categories.push({ label: "Core Competencies", items: [keyword] })
+        } else {
+          const firstCat = { ...categories[0] }
+          firstCat.items = Array.from(new Set([...(firstCat.items || []), keyword]))
+          categories[0] = firstCat
+        }
+        const updatedSection: ResumeSection = { ...target, categories }
+        updated.sections[existingIndex] = updatedSection
+      }
+      return updated
+    })
+  }, [])
+
+  const handleSaveToVault = useCallback(async () => {
+    if (!resumeData) return
+    setIsSavingToVault(true)
+    try {
+      const firstRole = resumeData.sections.find((s) => s.type === "bullet_list" || s.type === "projects")?.entries?.[0]?.subheading
+      const jobTitle = detectedMeta?.title || firstRole || "Software Engineer"
+      const companyName = detectedMeta?.company || "Target Company"
+
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobTitle,
+          companyName,
+          targetCountry,
+          atsScore: atsScoreData?.overallScore || 0,
+          status: "saved",
+          resumeData,
+          latexCode,
+          coverLetter,
+          outreach: coldEmail && coldDM ? { coldEmail, coldDM } : null,
+        }),
+      })
+
+      if (res.ok) {
+        setVaultSavedSuccess(true)
+        setTimeout(() => setVaultSavedSuccess(false), 3000)
+      }
+    } catch (err) {
+      console.error("Failed to save to vault:", err)
+    } finally {
+      setIsSavingToVault(false)
+    }
+  }, [resumeData, detectedMeta, targetCountry, atsScoreData, latexCode, coverLetter, coldEmail, coldDM])
 
   const effectiveStep = isSignedIn ? Math.max(currentStep, 2) : currentStep
 
@@ -297,6 +378,19 @@ export default function GeneratePage() {
         <Navbar />
 
         <main className="relative z-10 flex flex-1 w-full max-w-3xl flex-col items-center justify-center p-4 pt-24 pb-12 space-y-4">
+          {atsScoreData && (
+            <div className="w-full space-y-3">
+              <AtsScoreCard
+                scoreData={atsScoreData}
+                onInjectKeyword={handleInjectKeyword}
+              />
+              <DiffInspector
+                resume={resumeData}
+                matchedKeywords={atsScoreData.matchedKeywords}
+              />
+            </div>
+          )}
+
           <LaTeXPreview
             latexCode={latexCode}
             resumeData={resumeData}
@@ -348,12 +442,20 @@ export default function GeneratePage() {
           {coldEmail && coldDM && (
             <OutreachPreview email={coldEmail} dm={coldDM} />
           )}
-          <div className="flex justify-center gap-2 pt-2">
-            <Button variant="outline" onClick={handleBackToEdit} className="glass-pill">
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+            <Button
+              onClick={handleSaveToVault}
+              disabled={isSavingToVault}
+              className="glossy-btn-primary text-black font-semibold text-xs h-9 px-4 rounded-xl shadow-lg"
+            >
+              <FolderKanban size={14} className="mr-1.5 shrink-0 text-black" />
+              {vaultSavedSuccess ? "Saved to Vault!" : isSavingToVault ? "Saving..." : "Save to Vault & Tracker"}
+            </Button>
+            <Button variant="outline" onClick={handleBackToEdit} className="glass-pill text-xs h-9">
               <UndoIcon size={14} className="mr-1.5 shrink-0" />
               Back to Edit
             </Button>
-            <Button variant="outline" onClick={handleDownloadTeX} className="glass-pill">
+            <Button variant="outline" onClick={handleDownloadTeX} className="glass-pill text-xs h-9">
               <CloudDownloadIcon size={14} className="mr-1.5 shrink-0" />
               Download .tex
             </Button>
@@ -418,6 +520,7 @@ export default function GeneratePage() {
                     onChange={setJd}
                     targetCountry={targetCountry}
                     onCountryChange={setTargetCountry}
+                    onMetadataChange={setDetectedMeta}
                   />
                 </CardContent>
               </StepperContent>
