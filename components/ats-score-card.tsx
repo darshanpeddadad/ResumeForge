@@ -135,24 +135,24 @@ export function AtsScoreCard({ scoreData, onInjectKeyword }: AtsScoreCardProps) 
         </div>
       </div>
 
-      {/* 3 Metric Pills with strict thresholds */}
+      {/* 3 Metric Pills with calibrated 50 / 25 / 25 weights */}
       <div className="grid grid-cols-3 gap-2 pt-1">
         <div className="rounded-xl border border-border/40 bg-muted/20 p-2 text-center space-y-0.5">
-          <div className="text-[10px] uppercase font-semibold text-muted-foreground">JD Keywords</div>
+          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Keywords (50%)</div>
           <div className={`text-xs font-bold ${scoreData.keywordScore >= 80 ? "text-emerald-400" : scoreData.keywordScore >= 60 ? "text-amber-400" : "text-rose-400"}`}>
             {scoreData.keywordScore}%
           </div>
         </div>
 
         <div className="rounded-xl border border-border/40 bg-muted/20 p-2 text-center space-y-0.5">
-          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Measurable Impact</div>
-          <div className={`text-xs font-bold ${scoreData.metricPercentage >= 80 ? "text-emerald-400" : scoreData.metricPercentage >= 50 ? "text-amber-400" : "text-rose-400"}`}>
-            {scoreData.metricPercentage}% ({scoreData.quantifiedBulletsCount}/{scoreData.totalBulletsCount})
+          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Content (25%)</div>
+          <div className={`text-xs font-bold ${scoreData.metricScore >= 80 ? "text-emerald-400" : scoreData.metricScore >= 60 ? "text-amber-400" : "text-rose-400"}`}>
+            {scoreData.metricScore}%
           </div>
         </div>
 
         <div className="rounded-xl border border-border/40 bg-muted/20 p-2 text-center space-y-0.5">
-          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Structure</div>
+          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Structure (25%)</div>
           <div className={`text-xs font-bold ${scoreData.structureScore >= 90 ? "text-primary" : "text-amber-400"}`}>
             {scoreData.structureScore}%
           </div>

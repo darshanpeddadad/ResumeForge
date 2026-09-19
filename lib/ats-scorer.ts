@@ -381,7 +381,11 @@ function extractExplicitSkillsFromResume(resume: Resume): string[] {
         lowerTitle.includes("competenc") ||
         lowerTitle.includes("certificat") ||
         lowerTitle.includes("tool") ||
-        lowerTitle.includes("technolog");
+        lowerTitle.includes("technolog") ||
+        lowerTitle.includes("coursework") ||
+        lowerTitle.includes("course") ||
+        lowerTitle.includes("academic") ||
+        lowerTitle.includes("education");
 
       if (isSkillOrCert) {
         if (Array.isArray(section.categories)) {
@@ -401,6 +405,28 @@ function extractExplicitSkillsFromResume(resume: Resume): string[] {
             const clean = item.trim();
             if (clean.length >= 2 && !GENERAL_STOP_WORDS.has(clean.toLowerCase()) && !UNIVERSAL_NOISE_WORDS.has(clean.toLowerCase())) {
               skills.push(clean);
+            }
+          }
+        }
+        // Extract comma-separated coursework or skills in entries / bullet lists
+        if (Array.isArray(section.entries)) {
+          for (const entry of section.entries) {
+            const entryText = `${entry.heading || ""} ${entry.subheading || ""}`;
+            if (
+              lowerTitle.includes("coursework") ||
+              lowerTitle.includes("education") ||
+              entryText.toLowerCase().includes("coursework")
+            ) {
+              const bullets = Array.isArray(entry.bullets) ? entry.bullets : [];
+              for (const b of [entryText, ...bullets]) {
+                const parts = b.split(/[,•|;\n]/);
+                for (const p of parts) {
+                  const clean = p.replace(/^(?:relevant coursework|coursework|courses?)\s*[:\-]?/i, "").trim();
+                  if (clean.length >= 3 && !GENERAL_STOP_WORDS.has(clean.toLowerCase()) && !UNIVERSAL_NOISE_WORDS.has(clean.toLowerCase())) {
+                    skills.push(clean);
+                  }
+                }
+              }
             }
           }
         }
@@ -609,13 +635,12 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
     }
   }
 
-  // 1. Keyword Score (Strict non-linear curve)
-  // Missing critical keywords is punished heavily; 100% requires exhaustive coverage
-  let keywordScore = 70; // baseline if no JD provided
+  // 1. Keyword Score (50% Weight - Primary ATS Match Pillar)
+  // Evaluates coverage of hard skills, technologies, and academic requirements
+  let keywordScore = 75; // baseline if no JD provided
   if (jdKeywords.length > 0) {
     const rawMatchRatio = matchedKeywords.length / jdKeywords.length;
-    // Strict curve: requires 90%+ match to get into the 80s
-    keywordScore = Math.min(95, Math.round(Math.pow(rawMatchRatio, 1.25) * 100));
+    keywordScore = Math.min(98, Math.round(Math.pow(rawMatchRatio, 1.05) * 100));
   }
 
   // 2. Metrics & Quantification Audit (Audits Work Experience & Projects ONLY)
@@ -640,7 +665,8 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
         lowerTitle.includes("certification") ||
         lowerTitle.includes("language") ||
         lowerTitle.includes("interest") ||
-        lowerTitle.includes("volunteer");
+        lowerTitle.includes("volunteer") ||
+        lowerTitle.includes("coursework");
 
       if (isNonWork) continue;
 
@@ -718,14 +744,16 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
   const metricRatio = quantifiedCount / totalBullets;
   const actionVerbRatio = actionVerbCount / totalBullets;
 
-  // Metric Scoring: high quantification + active verbs
+  // 2. Content Quality & Measurable Impact Score (25% Weight)
+  // Combines quantified outcomes and strong action verbs
   const rawMetricScore = Math.min(
     100,
-    Math.round((metricRatio * 70) + (actionVerbRatio * 30))
+    Math.round((metricRatio * 60) + (actionVerbRatio * 40))
   );
-  const metricScore = Math.min(95, rawMetricScore);
+  const metricScore = Math.min(98, rawMetricScore);
 
-  // 3. Structure & Section Completeness Score (20% weight)
+  // 3. Structure & Section Completeness Score (25% Weight)
+  // Evaluates ATS parser readability, contact completeness, and core section presence
   let structurePoints = 0;
   if (resume.contact?.name && resume.contact?.email) structurePoints += 25;
   const hasSummary = Array.isArray(resume.sections) && resume.sections.some(
@@ -737,21 +765,21 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
   );
   if (hasExperience) structurePoints += 25;
   const hasSkills = Array.isArray(resume.sections) && resume.sections.some(
-    (s) => s.type === "skills" || (s.categories && s.categories.length > 0)
+    (s) => s.type === "skills" || (s.categories && s.categories.length > 0) || (s.items && s.items.length > 0)
   );
   if (hasSkills) structurePoints += 25;
 
   const structureScore = Math.min(100, structurePoints);
 
   // ═══════════════════════════════════════════════════════════════
-  // HARSH DEFICIENCIES & PENALTY SYSTEM (THE NEGATIVES)
+  // REFINED DEFICIENCIES & PENALTY SYSTEM (GENUINE SCREENING RISKS)
   // ═══════════════════════════════════════════════════════════════
   const redFlags: AtsRedFlag[] = [];
   let totalPenalties = 0;
 
   // Deduction 1: Passive voice / weak non-ownership verbs
   if (passiveBullets.length > 0) {
-    const penalty = Math.min(20, passiveBullets.length * 4);
+    const penalty = Math.min(6, passiveBullets.length * 2);
     totalPenalties += penalty;
     const sample = passiveBullets[0];
     redFlags.push({
@@ -766,27 +794,27 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
     });
   }
 
-  // Deduction 2: Unquantified claims
+  // Deduction 2: Extreme lack of quantification
   const unquantifiedCount = totalBullets - quantifiedCount;
-  if (metricRatio < 0.80 && unquantifiedCount > 0) {
-    const penalty = Math.min(20, unquantifiedCount * 3);
+  if (metricRatio < 0.35 && unquantifiedCount > 0) {
+    const penalty = Math.min(6, Math.round(unquantifiedCount * 1.5));
     totalPenalties += penalty;
     const sample = unquantifiedBullets[0];
     redFlags.push({
       id: "flag-unquantified",
-      severity: metricRatio < 0.50 ? "critical" : "warning",
+      severity: metricRatio < 0.20 ? "critical" : "warning",
       category: "unquantified_bullet",
-      title: `${unquantifiedCount} Work Achievement${unquantifiedCount > 1 ? "s" : ""} Lack Measurable Scale`,
-      description: "Recruiters and ATS parsers downrank unquantified experience bullets. Claims without revenue, percentages, scale, client/user volume, or measurable impact appear unsubstantiated.",
+      title: `Low Quantification Density (${Math.round(metricRatio * 100)}%)`,
+      description: "Recruiters favor experience bullets with verifiable scale. Adding percentages, user counts, latency reductions, or volume benchmarks increases recruiter engagement.",
       penaltyPoints: penalty,
       flaggedText: sample,
-      remediation: "Add measurable outcomes (e.g. % growth, cost/time savings, client/patient volume, or efficiency gains)."
+      remediation: "Add measurable outcomes (e.g. % growth, cost/time savings, client/user volume, or latency improvements)."
     });
   }
 
   // Deduction 3: Cliché Buzzwords & Fluff
   if (fluffViolations.length > 0) {
-    const penalty = Math.min(15, fluffViolations.length * 3);
+    const penalty = Math.min(5, fluffViolations.length * 2);
     totalPenalties += penalty;
     const sample = fluffViolations[0];
     redFlags.push({
@@ -801,11 +829,11 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
     });
   }
 
-  // Deduction 4: Missing Primary Job Description Skills
+  // Deduction 4: Missing Primary Job Description Skills (Genuine Knockout Filter)
   if (jdKeywords.length >= 4 && missingKeywords.length > 0) {
     const missingRatio = missingKeywords.length / jdKeywords.length;
-    if (missingRatio > 0.35) {
-      const penalty = Math.min(24, Math.round(missingRatio * 25));
+    if (missingRatio > 0.40) {
+      const penalty = Math.min(10, Math.round(missingRatio * 12));
       totalPenalties += penalty;
       const topMissing = missingKeywords.slice(0, 4).join(", ");
       redFlags.push({
@@ -822,7 +850,7 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
 
   // Deduction 5: Formatting / Bullet Length Violations
   if (lengthViolations.length > 0) {
-    const penalty = Math.min(10, lengthViolations.length * 2);
+    const penalty = Math.min(4, lengthViolations.length * 1);
     totalPenalties += penalty;
     const sample = lengthViolations[0];
     redFlags.push({
@@ -839,26 +867,27 @@ export function calculateAtsScore(resume: Resume, jobDescription: string): AtsSc
 
   // Deduction 6: Missing Professional Summary
   if (!hasSummary) {
-    totalPenalties += 8;
+    totalPenalties += 4;
     redFlags.push({
       id: "flag-no-summary",
       severity: "warning",
       category: "formatting_risk",
-      title: "Missing High-Impact Professional Summary",
+      title: "Missing Professional Summary",
       description: "Resumes without an executive 3-line summary suffer lower engagement in the first 6-second recruiter screen.",
-      penaltyPoints: 8,
+      penaltyPoints: 4,
       remediation: "Add an authoritative 2-3 sentence Professional Summary at the top of your resume."
     });
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // FINAL HARSH RATING CALCULATION
+  // CALIBRATED REAL-WORLD ATS RATING (50% KW / 25% CONTENT / 25% STRUCT)
   // ═══════════════════════════════════════════════════════════════
-  const rawWeighted = keywordScore * 0.40 + metricScore * 0.40 + structureScore * 0.20;
-  // Apply deductions strictly: real screeners deduct points from raw match
-  const calculatedOverall = Math.round(rawWeighted - totalPenalties);
-  // Cap between 15% and 96%
-  const overallScore = Math.max(15, Math.min(96, calculatedOverall));
+  const rawWeighted = (keywordScore * 0.50) + (metricScore * 0.25) + (structureScore * 0.25);
+  // Deductions capped at max 15 points to prevent unrealistic score collapse
+  const effectivePenalties = Math.min(15, totalPenalties);
+  const calculatedOverall = Math.round(rawWeighted - effectivePenalties);
+  // Realistic score boundaries: 25% to 98%
+  const overallScore = Math.max(25, Math.min(98, calculatedOverall));
 
   // Risk Level Classification
   let rejectionRisk: AtsScoreResult["rejectionRisk"] = "Moderate";
