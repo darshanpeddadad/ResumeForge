@@ -7,7 +7,8 @@ import { executeWithModelFallback } from "@/lib/ai-runner";
 import { DEFAULT_MODEL, type Provider } from "@/lib/ai-models";
 import { generateText } from "ai";
 
-export const maxDuration = 45;
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
 
 /**
  * Decodes all named and numeric (decimal & hex) HTML entities.
@@ -331,6 +332,7 @@ async function fetchLinkedInJob(jobId: string): Promise<{ title?: string; compan
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9,de;q=0.8,fr;q=0.7,*;q=0.5",
       },
+      signal: AbortSignal.timeout(5000),
       next: { revalidate: 0 },
     });
 
@@ -380,7 +382,7 @@ async function fetchGreenhouseJob(url: URL): Promise<{ title?: string; company?:
     const id = match[2];
 
     const apiUrl = `https://boards-api.greenhouse.io/v1/boards/${board}/jobs/${id}`;
-    const res = await fetch(apiUrl, { next: { revalidate: 0 } });
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(5000), next: { revalidate: 0 } });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -405,7 +407,7 @@ async function fetchLeverJob(url: URL): Promise<{ title?: string; company?: stri
     const id = parts[1];
 
     const apiUrl = `https://api.lever.co/v0/postings/${company}/${id}`;
-    const res = await fetch(apiUrl, { next: { revalidate: 0 } });
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(5000), next: { revalidate: 0 } });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -428,7 +430,7 @@ async function fetchWorkableJob(url: URL): Promise<{ title?: string; company?: s
     const id = parts[2];
 
     const apiUrl = `https://apply.workable.com/api/v1/widget/accounts/${company}/jobs/${id}`;
-    const res = await fetch(apiUrl, { next: { revalidate: 0 } });
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(5000), next: { revalidate: 0 } });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -451,7 +453,7 @@ async function fetchSmartRecruitersJob(url: URL): Promise<{ title?: string; comp
     const postingId = parts[1].split("-")[0];
 
     const apiUrl = `https://api.smartrecruiters.com/v1/companies/${company}/postings/${postingId}`;
-    const res = await fetch(apiUrl, { next: { revalidate: 0 } });
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(5000), next: { revalidate: 0 } });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -485,6 +487,7 @@ async function fetchAshbyJob(url: URL): Promise<{ title?: string; company?: stri
         variables: { organizationHostedJobsPageName: company, jobPostingId: id },
         query: "query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) { jobPosting(organizationHostedJobsPageName: $organizationHostedJobsPageName, jobPostingId: $jobPostingId) { title descriptionHtml } }"
       }),
+      signal: AbortSignal.timeout(5000),
       next: { revalidate: 0 }
     });
     if (!res.ok) return null;
@@ -508,20 +511,16 @@ async function fetchAshbyJob(url: URL): Promise<{ title?: string; company?: stri
 async function fetchViaJinaReader(targetUrl: string): Promise<{ title?: string; company?: string; jdText?: string } | null> {
   try {
     const jinaUrl = `https://r.jina.ai/${encodeURIComponent(targetUrl)}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
     const res = await fetch(jinaUrl, {
       headers: {
         "Accept": "text/plain",
         "X-No-Cache": "true",
-        "X-Timeout": "12",
+        "X-Timeout": "6",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       },
-      signal: controller.signal,
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 0 }
     });
-    clearTimeout(timeout);
 
     if (!res.ok) return null;
     const text = await res.text();
@@ -733,6 +732,7 @@ export async function POST(request: NextRequest) {
             "Sec-Fetch-Site": "none",
             "Upgrade-Insecure-Requests": "1",
           },
+          signal: AbortSignal.timeout(6000),
           next: { revalidate: 0 },
         });
 
@@ -826,16 +826,6 @@ export async function POST(request: NextRequest) {
 
     // Detect language of the extracted text
     const lang = detectLanguage(extracted.jdText);
-    let englishTranslation: string | null = null;
-
-    // If the job is non-English, attempt an intelligent translation pass if the user has AI configured
-    if (lang.isNonEnglish) {
-      englishTranslation = await translateJobWithAi(
-        session.user.id,
-        extracted.jdText,
-        lang.language
-      );
-    }
 
     return NextResponse.json({
       success: true,
@@ -845,7 +835,7 @@ export async function POST(request: NextRequest) {
       detectedLanguage: lang.language,
       languageFlag: lang.flag,
       isNonEnglish: lang.isNonEnglish,
-      englishTranslation,
+      englishTranslation: null,
     });
   } catch (error) {
     safeLog.error("Error extracting job description from URL:", error);
